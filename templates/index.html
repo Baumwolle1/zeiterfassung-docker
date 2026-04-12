@@ -29,7 +29,7 @@
         </label>
 
         <div class="quick-types">
-          {% for key in ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst", "Urlaub", "Feiertag", "Frei"] %}
+          {% for key in ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst", "Urlaub", "Krank", "Feiertag", "Frei"] %}
             <button class="chip {% if form_data.shift_type == key %}active{% endif %}" type="button" data-shift-choice="{{ key }}">{{ shift_config[key].label }}</button>
           {% endfor %}
         </div>
@@ -166,6 +166,18 @@
       <span>Monat</span>
       <strong id="summary-month-bottom">{{ month_balance }}</strong>
     </article>
+    <article class="summary-card glass">
+      <span>Urlaub genommen</span>
+      <strong id="summary-vacation-used">{{ vacation_taken }} / {{ vacation_total }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Urlaub verbleibend</span>
+      <strong id="summary-vacation-left">{{ vacation_remaining }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Kranktage Jahr</span>
+      <strong id="summary-sick-days">{{ sick_days }}</strong>
+    </article>
   </section>
 
   <footer class="version-footer">
@@ -189,9 +201,13 @@
   const summaryMonth = document.getElementById("summary-month");
   const summaryWeekBottom = document.getElementById("summary-week-bottom");
   const summaryMonthBottom = document.getElementById("summary-month-bottom");
+  const summaryVacationUsed = document.getElementById("summary-vacation-used");
+  const summaryVacationLeft = document.getElementById("summary-vacation-left");
+  const summarySickDays = document.getElementById("summary-sick-days");
   const selectedDayCard = document.querySelector("[data-selected-day-card]");
   const notesInput = form.querySelector('textarea[name="notes"]');
-  const zeroHourTypes = ["Urlaub", "Feiertag", "Frei"];
+  const zeroHourTypes = ["Urlaub", "Krank", "Feiertag", "Frei"];
+  const vacationTotal = {{ vacation_total | tojson }};
   let autosaveTimer = null;
   let saveRequestId = 0;
   let latestAppliedRequestId = 0;
@@ -264,6 +280,9 @@
     summaryMonth.textContent = data.month_balance;
     summaryWeekBottom.textContent = data.week_balance;
     summaryMonthBottom.textContent = data.month_balance;
+    summaryVacationUsed.textContent = `${data.vacation_taken} / ${vacationTotal}`;
+    summaryVacationLeft.textContent = data.vacation_remaining;
+    summarySickDays.textContent = data.sick_days;
 
     if (selectedDayCard) {
       selectedDayCard.href = data.day_href;

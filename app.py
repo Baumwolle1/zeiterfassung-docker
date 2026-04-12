@@ -19,6 +19,7 @@ APP_TITLE = "Zeiterfassung"
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "krause")
 APP_SECRET_KEY = os.environ.get("APP_SECRET_KEY", "zeiterfassung-krause-login")
 SESSION_DAYS = 30
+YEAR_VACATION_DAYS = 30
 MONTH_NAMES = [
     "Januar",
     "Februar",
@@ -41,6 +42,7 @@ SHIFT_CONFIG = {
     "Freitag": {"label": "Freitag", "target": 360, "break": 0, "start": "07:00", "end": "13:00"},
     "Notdienst": {"label": "Notdienst", "target": 0, "break": 0, "start": "", "end": ""},
     "Urlaub": {"label": "Urlaub", "target": 0, "break": 0, "start": "", "end": ""},
+    "Krank": {"label": "Krank", "target": 0, "break": 0, "start": "", "end": ""},
     "Feiertag": {"label": "Feiertag", "target": 0, "break": 0, "start": "", "end": ""},
     "Frei": {"label": "Frei", "target": 0, "break": 0, "start": "", "end": ""},
 }
@@ -176,6 +178,7 @@ def create_app() -> Flask:
         )
         selected_totals = calculate_totals(form_data["shift_type"], form_data["start_time"], form_data["end_time"])
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, form_data)
+        vacation_taken, sick_days = count_special_days(year)
         visible_days = [
             item for item in days
             if view_mode == "month" or week_start <= item["date"] <= week_end
@@ -199,6 +202,10 @@ def create_app() -> Flask:
             month_target=format_minutes(month_target),
             month_actual=format_minutes(month_actual),
             month_balance=format_minutes(month_actual - month_target),
+            vacation_total=YEAR_VACATION_DAYS,
+            vacation_taken=vacation_taken,
+            vacation_remaining=max(YEAR_VACATION_DAYS - vacation_taken, 0),
+            sick_days=sick_days,
             week_start=week_start,
             week_end=week_end,
             week_label=f"KW {selected_date.isocalendar().week:02d}",
@@ -256,6 +263,7 @@ def create_app() -> Flask:
         totals = calculate_totals(shift_type, start_time, end_time)
         month_entries = fetch_month_entries(year, month)
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, entry)
+        vacation_taken, sick_days = count_special_days(year)
         return jsonify(
             {
                 "ok": True,
@@ -270,6 +278,9 @@ def create_app() -> Flask:
                 "balance_class": balance_class(totals.balance),
                 "week_balance": format_minutes(week_actual - week_target),
                 "month_balance": format_minutes(month_actual - month_target),
+                "vacation_taken": vacation_taken,
+                "vacation_remaining": max(YEAR_VACATION_DAYS - vacation_taken, 0),
+                "sick_days": sick_days,
                 "day_href": url_for("index", year=year, month=month, day=day, view=view_mode),
                 "day_target": format_minutes(totals.target),
                 "day_actual": format_minutes(totals.actual),
@@ -431,6 +442,24 @@ def save_entry(day_value: date, shift_type: str, start_time: str, end_time: str,
             """,
             (day_value.isoformat(), shift_type, start_time, end_time, notes, datetime.now().isoformat(timespec="seconds")),
         )
+
+
+def count_special_days(year: int) -> tuple[int, int]:
+    start = date(year, 1, 1)
+    end = date(year, 12, 31)
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            """
+            SELECT shift_type, COUNT(*)
+            FROM entries
+            WHERE entry_date BETWEEN ? AND ?
+            AND shift_type IN ('Urlaub', 'Krank')
+            GROUP BY shift_type
+            """,
+            (start.isoformat(), end.isoformat()),
+        ).fetchall()
+    counts = {row[0]: row[1] for row in rows}
+    return counts.get("Urlaub", 0), counts.get("Krank", 0)
 
 
 def default_type_for(day_value: date) -> str:

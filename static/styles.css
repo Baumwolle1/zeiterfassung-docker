@@ -115,7 +115,7 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -444,10 +444,6 @@ input:focus, select:focus, textarea:focus {
 @media (max-width: 1180px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .summary-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .days {
