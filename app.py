@@ -35,6 +35,7 @@ MONTH_NAMES = [
     "Dezember",
 ]
 WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+WEEKDAY_SHORT = ["MO", "DI", "MI", "DO", "FR", "SA", "SO"]
 
 SHIFT_CONFIG = {
     "Fruehschicht": {"label": "Frühschicht", "target": 450, "break": 30, "start": "07:00", "end": "15:00"},
@@ -629,7 +630,7 @@ def shift_month(base: date, delta: int) -> date:
 def build_month_pdf(year: int, month: int):
     month_entries = fetch_month_entries(year, month)
     _, days_in_month = calendar.monthrange(year, month)
-    data = [["Datum", "Tag", "Typ", "Beginn", "Ende", "Soll", "Ist", "Saldo", "Notiz"]]
+    data = [["Datum", "Beginn", "Ende", "Soll", "Ist", "Saldo", "Notiz"]]
     month_target = 0
     month_actual = 0
 
@@ -642,9 +643,7 @@ def build_month_pdf(year: int, month: int):
         month_actual += totals.actual
         data.append(
             [
-                current.strftime("%d.%m.%Y"),
-                WEEKDAY_NAMES[current.weekday()],
-                SHIFT_CONFIG[shift_type]["label"],
+                f"{WEEKDAY_SHORT[current.weekday()]} {current.strftime('%d.%m.%Y')}",
                 (entry["start_time"] if entry else "") or "-",
                 (entry["end_time"] if entry else "") or "-",
                 format_minutes(totals.target),
@@ -654,28 +653,38 @@ def build_month_pdf(year: int, month: int):
             ]
         )
 
-    data.append(["", "", "Monat gesamt", "", "", format_minutes(month_target), format_minutes(month_actual), format_minutes(month_actual - month_target), ""])
+    data.append(["Monat gesamt", "", "", format_minutes(month_target), format_minutes(month_actual), format_minutes(month_actual - month_target), ""])
 
     buffer = io.BytesIO()
     document = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=12 * mm, leftMargin=12 * mm, topMargin=12 * mm, bottomMargin=12 * mm)
     styles = getSampleStyleSheet()
     story = [
         Paragraph(f"Zeiterfassung {MONTH_NAMES[month - 1]} {year}", styles["Title"]),
-        Spacer(1, 8),
-        Paragraph("Monatsuebersicht mit Soll-Ist-Auswertung.", styles["BodyText"]),
-        Spacer(1, 10),
+        Spacer(1, 6),
+        Paragraph("Monatsuebersicht mit klarer Soll-Ist-Auswertung.", styles["BodyText"]),
+        Spacer(1, 14),
     ]
-    table = Table(data, repeatRows=1, colWidths=[24 * mm, 25 * mm, 28 * mm, 18 * mm, 18 * mm, 18 * mm, 18 * mm, 18 * mm, 78 * mm])
+    table = Table(data, repeatRows=1, colWidths=[34 * mm, 20 * mm, 20 * mm, 19 * mm, 19 * mm, 19 * mm, 126 * mm])
     table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DDE8FF")),
-                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EEF4FF")),
-                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#BAC8D9")),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.whitesmoke, colors.HexColor("#F8FAFD")]),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#CFE0FF")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#16325C")),
+                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EAF3FF")),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#C9D7E6")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.HexColor("#FFFFFF"), colors.HexColor("#F7FAFE")]),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN", (0, 0), (-2, -1), "CENTER"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+                ("TOPPADDING", (0, 0), (-1, 0), 8),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 7),
+                ("TOPPADDING", (0, 1), (-1, -1), 7),
+                ("ALIGN", (1, 0), (-2, -1), "CENTER"),
+                ("ALIGN", (0, 0), (0, -1), "LEFT"),
                 ("ALIGN", (-1, 1), (-1, -1), "LEFT"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("LINEABOVE", (0, -1), (-1, -1), 0.6, colors.HexColor("#9EB6D1")),
             ]
         )
     )
