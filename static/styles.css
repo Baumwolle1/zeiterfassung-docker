@@ -109,6 +109,28 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 }
 
 .month-panel, .form-panel { padding: 18px; }
+.view-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 12px;
+}
+.toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 16px;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 700;
+}
+.toggle-pill.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 .week-toolbar {
   display: grid;
   gap: 12px;
@@ -123,9 +145,13 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   color: var(--muted);
 }
 .week-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
-  flex-wrap: wrap;
+}
+.week-actions form,
+.week-actions .button {
+  width: 100%;
 }
 
 .month-header {
@@ -301,12 +327,11 @@ input:focus, select:focus, textarea:focus {
   .hero-actions { width: 100%; }
   .hero-actions .button { width: 100%; }
   .summary-grid { grid-template-columns: 1fr 1fr; }
+  .view-toggle { grid-template-columns: 1fr; }
   .day-card { grid-template-columns: 52px 1fr; }
   .balance { grid-column: 2; justify-self: start; }
   .form-summary { grid-template-columns: 1fr; }
   .time-grid { grid-template-columns: 1fr; }
-  .week-actions { flex-direction: column; }
-  .week-actions form { width: 100%; }
-  .week-actions .button { width: 100%; }
+  .week-actions { grid-template-columns: 1fr; }
   .quick-types { display: grid; grid-template-columns: 1fr 1fr; }
 }
