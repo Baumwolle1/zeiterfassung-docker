@@ -117,6 +117,27 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 }
 
 .month-panel, .form-panel { padding: 18px; }
+.week-apply-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.week-apply-bar form,
+.week-apply-button {
+  width: 100%;
+}
+.week-apply-button {
+  min-height: 54px;
+  padding: 0 18px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.96);
+  color: var(--text);
+  border: 1px solid rgba(147, 166, 191, 0.24);
+  box-shadow: var(--shadow);
+  font-size: 1rem;
+  font-weight: 800;
+}
 .view-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -156,24 +177,8 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   font-size: 1rem;
   color: var(--muted);
 }
-.week-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  min-width: 220px;
-}
-.week-actions form,
-.week-actions .button {
-  width: 100%;
-}
-.week-button {
-  min-height: 46px;
-  padding: 0 18px;
-  border-radius: 16px;
-  background: rgba(255,255,255,0.92);
-  color: var(--accent);
-  border: 1px solid rgba(75, 134, 255, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5);
+.week-range {
+  color: var(--text);
   font-weight: 800;
 }
 
@@ -361,6 +366,7 @@ input:focus, select:focus, textarea:focus {
   .hero-actions { width: 100%; }
   .hero-actions .button { width: 100%; }
   .summary-grid { grid-template-columns: 1fr 1fr; }
+  .week-apply-bar { grid-template-columns: 1fr 1fr; }
   .view-toggle { grid-template-columns: 1fr; }
   .day-card { grid-template-columns: 52px 1fr; }
   .balance { grid-column: 2; justify-self: start; }
@@ -371,11 +377,6 @@ input:focus, select:focus, textarea:focus {
     flex-direction: column;
     align-items: stretch;
   }
-  .week-actions {
-    grid-template-columns: 1fr 1fr;
-    min-width: 0;
-  }
-  .week-actions form,
-  .week-actions .button { width: 100%; }
+  .week-range { text-align: left; }
   .quick-types { display: grid; grid-template-columns: 1fr 1fr; }
 }
