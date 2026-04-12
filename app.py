@@ -35,11 +35,12 @@ SHIFT_CONFIG = {
     "Fruehschicht": {"label": "Fruehschicht", "target": 460, "break": 20, "start": "07:00", "end": "15:00"},
     "Spaetschicht": {"label": "Spaetschicht", "target": 420, "break": 0, "start": "12:00", "end": "19:00"},
     "Freitag": {"label": "Freitag", "target": 360, "break": 0, "start": "07:00", "end": "13:00"},
+    "Notdienst": {"label": "Notdienst", "target": 0, "break": 0, "start": "", "end": ""},
     "Urlaub": {"label": "Urlaub", "target": 0, "break": 0, "start": "", "end": ""},
     "Feiertag": {"label": "Feiertag", "target": 0, "break": 0, "start": "", "end": ""},
     "Frei": {"label": "Frei", "target": 0, "break": 0, "start": "", "end": ""},
 }
-WORK_TYPES = ("Fruehschicht", "Spaetschicht", "Freitag")
+WORK_TYPES = ("Fruehschicht", "Spaetschicht", "Freitag", "Notdienst")
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ["DATA_DIR"]) if os.environ.get("DATA_DIR") else BASE_DIR / "data"
 DB_PATH = DATA_DIR / "zeiterfassung.db"
@@ -102,6 +103,8 @@ def create_app() -> Flask:
                     "actual_text": format_minutes(totals.actual),
                     "balance_text": format_minutes(totals.balance),
                     "balance_class": balance_class(totals.balance),
+                    "is_today": current_date == today,
+                    "holiday_name": holiday_name_for(current_date),
                 }
             )
 
@@ -118,6 +121,8 @@ def create_app() -> Flask:
         )
         selected_totals = calculate_totals(form_data["shift_type"], form_data["start_time"], form_data["end_time"])
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, form_data)
+        week_start = selected_date - timedelta(days=selected_date.weekday())
+        week_end = week_start + timedelta(days=6)
 
         return render_template(
             "index.html",
@@ -128,12 +133,15 @@ def create_app() -> Flask:
             days=days,
             form_data=form_data,
             selected_totals=selected_totals,
+            today=today,
             week_target=format_minutes(week_target),
             week_actual=format_minutes(week_actual),
             week_balance=format_minutes(week_actual - week_target),
             month_target=format_minutes(month_target),
             month_actual=format_minutes(month_actual),
             month_balance=format_minutes(month_actual - month_target),
+            week_start=week_start,
+            week_end=week_end,
             prev_month=month_nav(year, month, -1),
             next_month=month_nav(year, month, 1),
         )
@@ -157,6 +165,36 @@ def create_app() -> Flask:
             start_time = ""
             end_time = ""
         save_entry(selected_date, shift_type, start_time, end_time, notes)
+        return redirect(url_for("index", year=year, month=month, day=day))
+
+    @app.post("/apply-week-template")
+    def apply_week_template():
+        year = int(request.form["year"])
+        month = int(request.form["month"])
+        day = int(request.form["day"])
+        template_type = request.form["template_type"]
+        selected_date = date(year, month, day)
+
+        if template_type not in {"Fruehschicht", "Spaetschicht"}:
+            return redirect(url_for("index", year=year, month=month, day=day))
+
+        week_start = selected_date - timedelta(days=selected_date.weekday())
+        for offset in range(7):
+            current = week_start + timedelta(days=offset)
+            if current.month != month or current.year != year:
+                continue
+            if holiday_name_for(current):
+                save_entry(current, "Feiertag", "", "", "")
+                continue
+            if current.weekday() == 4:
+                save_entry(current, "Freitag", SHIFT_CONFIG["Freitag"]["start"], SHIFT_CONFIG["Freitag"]["end"], "")
+                continue
+            if current.weekday() >= 5:
+                save_entry(current, "Frei", "", "", "")
+                continue
+            defaults = SHIFT_CONFIG[template_type]
+            save_entry(current, template_type, defaults["start"], defaults["end"], "")
+
         return redirect(url_for("index", year=year, month=month, day=day))
 
     @app.get("/export/pdf")
@@ -230,11 +268,47 @@ def save_entry(day_value: date, shift_type: str, start_time: str, end_time: str,
 
 
 def default_type_for(day_value: date) -> str:
+    if holiday_name_for(day_value):
+        return "Feiertag"
     if day_value.weekday() == 4:
         return "Freitag"
     if day_value.weekday() >= 5:
         return "Frei"
     return "Fruehschicht"
+
+
+def holiday_name_for(day_value: date) -> str | None:
+    easter = easter_sunday(day_value.year)
+    holidays = {
+        date(day_value.year, 1, 1): "Neujahr",
+        date(day_value.year, 5, 1): "Tag der Arbeit",
+        date(day_value.year, 10, 3): "Tag der Deutschen Einheit",
+        date(day_value.year, 12, 25): "1. Weihnachtstag",
+        date(day_value.year, 12, 26): "2. Weihnachtstag",
+        easter - timedelta(days=2): "Karfreitag",
+        easter + timedelta(days=1): "Ostermontag",
+        easter + timedelta(days=39): "Christi Himmelfahrt",
+        easter + timedelta(days=50): "Pfingstmontag",
+    }
+    return holidays.get(day_value)
+
+
+def easter_sunday(year: int) -> date:
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return date(year, month, day)
 
 
 def parse_time(value: str) -> int | None:
