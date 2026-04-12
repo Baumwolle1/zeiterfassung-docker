@@ -633,6 +633,7 @@ def build_month_pdf(year: int, month: int):
     data = [["Datum", "Beginn", "Ende", "Soll", "Ist", "Saldo", "Notiz"]]
     month_target = 0
     month_actual = 0
+    highlighted_rows: list[tuple[int, str]] = []
 
     for day_number in range(1, days_in_month + 1):
         current = date(year, month, day_number)
@@ -652,6 +653,8 @@ def build_month_pdf(year: int, month: int):
                 (entry["notes"] if entry else "") or "-",
             ]
         )
+        if shift_type in {"Urlaub", "Krank", "Feiertag"}:
+            highlighted_rows.append((len(data) - 1, shift_type))
 
     data.append(["Monat gesamt", "", "", format_minutes(month_target), format_minutes(month_actual), format_minutes(month_actual - month_target), ""])
 
@@ -665,30 +668,59 @@ def build_month_pdf(year: int, month: int):
         Spacer(1, 14),
     ]
     table = Table(data, repeatRows=1, colWidths=[34 * mm, 20 * mm, 20 * mm, 19 * mm, 19 * mm, 19 * mm, 126 * mm])
-    table.setStyle(
+    table_style_commands = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#CFE0FF")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#16325C")),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EAF3FF")),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#C9D7E6")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.HexColor("#FFFFFF"), colors.HexColor("#F7FAFE")]),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+        ("TOPPADDING", (0, 0), (-1, 0), 8),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 7),
+        ("TOPPADDING", (0, 1), (-1, -1), 7),
+        ("ALIGN", (1, 0), (-2, -1), "CENTER"),
+        ("ALIGN", (0, 0), (0, -1), "LEFT"),
+        ("ALIGN", (-1, 1), (-1, -1), "LEFT"),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("LINEABOVE", (0, -1), (-1, -1), 0.6, colors.HexColor("#9EB6D1")),
+    ]
+    highlight_colors = {
+        "Urlaub": colors.HexColor("#E3F5D8"),
+        "Krank": colors.HexColor("#FFF2B8"),
+        "Feiertag": colors.HexColor("#FFD9D6"),
+    }
+    for row_index, shift_type in highlighted_rows:
+        table_style_commands.append(("BACKGROUND", (0, row_index), (-1, row_index), highlight_colors[shift_type]))
+
+    table.setStyle(TableStyle(table_style_commands))
+    story.append(table)
+    story.append(Spacer(1, 12))
+
+    legend_data = [["", "Urlaub", "", "Krank", "", "Feiertag"]]
+    legend = Table(legend_data, colWidths=[8 * mm, 22 * mm, 8 * mm, 20 * mm, 8 * mm, 28 * mm])
+    legend.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#CFE0FF")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#16325C")),
-                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EAF3FF")),
-                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#C9D7E6")),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.HexColor("#FFFFFF"), colors.HexColor("#F7FAFE")]),
+                ("BACKGROUND", (0, 0), (0, 0), highlight_colors["Urlaub"]),
+                ("BACKGROUND", (2, 0), (2, 0), highlight_colors["Krank"]),
+                ("BACKGROUND", (4, 0), (4, 0), highlight_colors["Feiertag"]),
+                ("BOX", (0, 0), (0, 0), 0.35, colors.HexColor("#98B58B")),
+                ("BOX", (2, 0), (2, 0), 0.35, colors.HexColor("#C8B15B")),
+                ("BOX", (4, 0), (4, 0), 0.35, colors.HexColor("#C38C86")),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (1, 0), (-1, -1), "Helvetica"),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-                ("TOPPADDING", (0, 0), (-1, 0), 8),
-                ("BOTTOMPADDING", (0, 1), (-1, -1), 7),
-                ("TOPPADDING", (0, 1), (-1, -1), 7),
-                ("ALIGN", (1, 0), (-2, -1), "CENTER"),
-                ("ALIGN", (0, 0), (0, -1), "LEFT"),
-                ("ALIGN", (-1, 1), (-1, -1), "LEFT"),
-                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-                ("LINEABOVE", (0, -1), (-1, -1), 0.6, colors.HexColor("#9EB6D1")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ]
         )
     )
-    story.append(table)
+    story.append(legend)
     document.build(story)
     buffer.seek(0)
     return buffer
