@@ -1,41 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
 <main class="shell">
-  <section class="hero glass">
-    <div>
-      <p class="eyebrow">Mobile Zeiterfassung</p>
-      <h1>{{ app_title }}</h1>
-      <p class="subtitle">Optimiert fuer Handy, Tablet und Portainer-Deployment auf deinem NAS.</p>
-    </div>
-    <div class="hero-actions">
-      <a class="button soft" href="{{ url_for('index', year=today.year, month=today.month, day=today.day) }}">Heute</a>
-      <a class="button dark" href="{{ url_for('export_pdf', year=year, month=month) }}">Monat als PDF</a>
-    </div>
-  </section>
-
-  <section class="summary-grid">
-    <article class="summary-card glass">
-      <span>Heute Soll</span>
-      <strong>{{ format_minutes(selected_totals.target) }}</strong>
-    </article>
-    <article class="summary-card glass">
-      <span>Heute Ist</span>
-      <strong class="positive">{{ format_minutes(selected_totals.actual) }}</strong>
-    </article>
-    <article class="summary-card glass">
-      <span>Heute Saldo</span>
-      <strong class="{{ balance_class(selected_totals.balance) }}">{{ format_minutes(selected_totals.balance) }}</strong>
-    </article>
-    <article class="summary-card glass">
-      <span>Woche</span>
-      <strong>{{ week_balance }}</strong>
-    </article>
-    <article class="summary-card glass">
-      <span>Monat</span>
-      <strong>{{ month_balance }}</strong>
-    </article>
-  </section>
-
   <section class="layout">
     <section class="glass form-panel">
       <div class="panel-head">
@@ -125,21 +90,21 @@
       </div>
 
       <div class="week-toolbar glass">
-        <strong>Woche {{ week_start.strftime("%d.%m.") }} - {{ week_end.strftime("%d.%m.") }}</strong>
+        <strong>{{ week_start.strftime("%d.%m.") }} - {{ week_end.strftime("%d.%m.") }}</strong>
         <div class="week-actions">
           <form method="post" action="{{ url_for('apply_week_template') }}">
             <input type="hidden" name="year" value="{{ year }}">
             <input type="hidden" name="month" value="{{ month }}">
             <input type="hidden" name="day" value="{{ selected_day }}">
             <input type="hidden" name="template_type" value="Fruehschicht">
-            <button class="button tiny week-button" type="submit">Frueh</button>
+            <button class="button week-button" type="submit" aria-label="Woche auf Fruehschicht setzen">Frueh</button>
           </form>
           <form method="post" action="{{ url_for('apply_week_template') }}">
             <input type="hidden" name="year" value="{{ year }}">
             <input type="hidden" name="month" value="{{ month }}">
             <input type="hidden" name="day" value="{{ selected_day }}">
             <input type="hidden" name="template_type" value="Spaetschicht">
-            <button class="button tiny week-button" type="submit">Spaet</button>
+            <button class="button week-button" type="submit" aria-label="Woche auf Spaetschicht setzen">Spaet</button>
           </form>
         </div>
       </div>
@@ -161,6 +126,41 @@
         {% endfor %}
       </div>
     </aside>
+  </section>
+
+  <section class="hero glass hero-bottom">
+    <div>
+      <p class="eyebrow">Mobile Zeiterfassung</p>
+      <h1>{{ app_title }}</h1>
+      <p class="subtitle">Optimiert fuer Handy, Tablet und Portainer-Deployment auf deinem NAS.</p>
+    </div>
+    <div class="hero-actions">
+      <a class="button soft" href="{{ url_for('index', year=today.year, month=today.month, day=today.day, view='week') }}">Heute</a>
+      <a class="button dark" href="{{ url_for('export_pdf', year=year, month=month) }}">Monat als PDF</a>
+    </div>
+  </section>
+
+  <section class="summary-grid summary-bottom">
+    <article class="summary-card glass">
+      <span>Heute Soll</span>
+      <strong>{{ format_minutes(selected_totals.target) }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Heute Ist</span>
+      <strong class="positive">{{ format_minutes(selected_totals.actual) }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Heute Saldo</span>
+      <strong class="{{ balance_class(selected_totals.balance) }}">{{ format_minutes(selected_totals.balance) }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Woche</span>
+      <strong>{{ week_balance }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Monat</span>
+      <strong>{{ month_balance }}</strong>
+    </article>
   </section>
 </main>
 
