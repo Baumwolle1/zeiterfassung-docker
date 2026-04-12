@@ -65,6 +65,11 @@ h1, h2, p { margin: 0; }
 h1 { font-size: clamp(2rem, 3.4vw, 3.3rem); }
 h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 .subtitle { margin-top: 8px; color: var(--muted); max-width: 55ch; }
+.hero-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 
 .button {
   display: inline-flex;
@@ -81,6 +86,8 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 
 .button.primary { background: linear-gradient(135deg, #4b86ff, #5ea2ff); color: white; }
 .button.dark { background: #1a2431; color: white; }
+.button.soft { background: rgba(255,255,255,0.86); color: var(--text); border: 1px solid rgba(147, 166, 191, 0.28); }
+.button.tiny { min-height: 38px; padding: 0 14px; border-radius: 14px; font-size: 0.94rem; }
 
 .summary-grid {
   display: grid;
@@ -102,6 +109,24 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 }
 
 .month-panel, .form-panel { padding: 18px; }
+.week-toolbar {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.week-toolbar strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.week-toolbar small {
+  color: var(--muted);
+}
+.week-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 
 .month-header {
   display: grid;
@@ -145,6 +170,9 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   background: rgba(235, 243, 255, 0.94);
   border-color: rgba(75, 134, 255, 0.5);
 }
+.day-card.today {
+  box-shadow: inset 0 0 0 1px rgba(75, 134, 255, 0.28), var(--shadow);
+}
 
 .day-number {
   display: grid;
@@ -159,6 +187,12 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 
 .day-copy { display: grid; gap: 3px; }
 .day-copy span, .day-copy small { color: var(--muted); }
+.day-copy em {
+  color: var(--accent);
+  font-style: normal;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
 .balance {
   font-weight: 800;
   font-size: 1.05rem;
@@ -170,6 +204,15 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 
 .panel-head {
   margin-bottom: 14px;
+}
+.holiday-badge {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: var(--accent);
+  background: rgba(75, 134, 255, 0.1);
+  font-weight: 700;
 }
 
 .entry-form {
@@ -208,6 +251,26 @@ input:focus, select:focus, textarea:focus {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+.quick-types {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.chip {
+  border: 1px solid rgba(147, 166, 191, 0.32);
+  background: rgba(255,255,255,0.9);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.chip.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(75, 134, 255, 0.32);
+}
 
 .form-summary {
   display: grid;
@@ -235,9 +298,15 @@ input:focus, select:focus, textarea:focus {
 @media (max-width: 640px) {
   .shell { width: min(100vw - 16px, 100%); padding-top: 10px; }
   .hero { padding: 18px; border-radius: 24px; flex-direction: column; align-items: stretch; }
+  .hero-actions { width: 100%; }
+  .hero-actions .button { width: 100%; }
   .summary-grid { grid-template-columns: 1fr 1fr; }
   .day-card { grid-template-columns: 52px 1fr; }
   .balance { grid-column: 2; justify-self: start; }
   .form-summary { grid-template-columns: 1fr; }
   .time-grid { grid-template-columns: 1fr; }
+  .week-actions { flex-direction: column; }
+  .week-actions form { width: 100%; }
+  .week-actions .button { width: 100%; }
+  .quick-types { display: grid; grid-template-columns: 1fr 1fr; }
 }
