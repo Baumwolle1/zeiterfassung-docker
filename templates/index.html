@@ -5,9 +5,12 @@
     <div>
       <p class="eyebrow">Mobile Zeiterfassung</p>
       <h1>{{ app_title }}</h1>
-      <p class="subtitle">Optimiert für Handy, Tablet und Portainer-Deployment auf deinem NAS.</p>
+      <p class="subtitle">Optimiert fuer Handy, Tablet und Portainer-Deployment auf deinem NAS.</p>
     </div>
-    <a class="button dark" href="{{ url_for('export_pdf', year=year, month=month) }}">Monat als PDF</a>
+    <div class="hero-actions">
+      <a class="button soft" href="{{ url_for('index', year=today.year, month=today.month, day=today.day) }}">Heute</a>
+      <a class="button dark" href="{{ url_for('export_pdf', year=year, month=month) }}">Monat als PDF</a>
+    </div>
   </section>
 
   <section class="summary-grid">
@@ -39,19 +42,45 @@
         <a class="icon-button" href="{{ url_for('index', year=prev_month.year, month=prev_month.month, day=selected_day) }}">&#8592;</a>
         <div>
           <h2>{{ month_names[month - 1] }} {{ year }}</h2>
-          <p>{{ days|length }} Tage</p>
+          <p>{{ days|length }} Tage im Blick</p>
         </div>
         <a class="icon-button" href="{{ url_for('index', year=next_month.year, month=next_month.month, day=selected_day) }}">&#8594;</a>
       </div>
 
+      <div class="week-toolbar glass">
+        <div>
+          <strong>Woche {{ week_start.strftime("%d.%m.") }} - {{ week_end.strftime("%d.%m.") }}</strong>
+          <small>Mit einem Klick die ganze Woche vorbelegen. Freitag bleibt automatisch Freitag.</small>
+        </div>
+        <div class="week-actions">
+          <form method="post" action="{{ url_for('apply_week_template') }}">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="month" value="{{ month }}">
+            <input type="hidden" name="day" value="{{ selected_day }}">
+            <input type="hidden" name="template_type" value="Fruehschicht">
+            <button class="button tiny soft" type="submit">Woche Frueh</button>
+          </form>
+          <form method="post" action="{{ url_for('apply_week_template') }}">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="month" value="{{ month }}">
+            <input type="hidden" name="day" value="{{ selected_day }}">
+            <input type="hidden" name="template_type" value="Spaetschicht">
+            <button class="button tiny soft" type="submit">Woche Spaet</button>
+          </form>
+        </div>
+      </div>
+
       <div class="days">
         {% for item in days %}
-          <a class="day-card glass {% if item.is_selected %}selected{% endif %}" href="{{ url_for('index', year=year, month=month, day=item.date.day) }}">
+          <a class="day-card glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %}" href="{{ url_for('index', year=year, month=month, day=item.date.day) }}">
             <div class="day-number">{{ "%02d"|format(item.date.day) }}</div>
             <div class="day-copy">
               <strong>{{ item.weekday }}</strong>
               <span>{{ shift_config[item.shift_type].label }}</span>
               <small>Soll {{ item.target_text }} | Ist {{ item.actual_text }}</small>
+              {% if item.holiday_name %}
+                <em>{{ item.holiday_name }}</em>
+              {% endif %}
             </div>
             <div class="balance {{ item.balance_class }}">{{ item.balance_text }}</div>
           </a>
@@ -62,8 +91,11 @@
     <section class="glass form-panel">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">Ausgewählter Tag</p>
+          <p class="eyebrow">Ausgewaehlter Tag</p>
           <h2>{{ weekday_names[selected_date.weekday()] }}, {{ selected_date.strftime("%d.%m.%Y") }}</h2>
+          {% if days[selected_day - 1].holiday_name %}
+            <p class="holiday-badge">{{ days[selected_day - 1].holiday_name }}</p>
+          {% endif %}
         </div>
       </div>
 
@@ -80,6 +112,12 @@
             {% endfor %}
           </select>
         </label>
+
+        <div class="quick-types">
+          {% for key in ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst", "Urlaub", "Feiertag", "Frei"] %}
+            <button class="chip {% if form_data.shift_type == key %}active{% endif %}" type="button" data-shift-choice="{{ key }}">{{ shift_config[key].label }}</button>
+          {% endfor %}
+        </div>
 
         <div class="time-grid">
           <label>
@@ -124,22 +162,37 @@
   const endInput = document.getElementById("end_time");
   const defaults = {{ shift_config | tojson }};
 
-  function applyShiftDefaults() {
+  function syncChips() {
+    document.querySelectorAll("[data-shift-choice]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.shiftChoice === shiftSelect.value);
+    });
+  }
+
+  function applyShiftDefaults(force = false) {
     const key = shiftSelect.value;
     const current = defaults[key];
-    const isWorkShift = ["Fruehschicht", "Spaetschicht", "Freitag"].includes(key);
+    const isWorkShift = ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst"].includes(key);
     startInput.disabled = !isWorkShift;
     endInput.disabled = !isWorkShift;
     if (!isWorkShift) {
       startInput.value = "";
       endInput.value = "";
+      syncChips();
       return;
     }
-    if (!startInput.value) startInput.value = current.start;
-    if (!endInput.value) endInput.value = current.end;
+    if (force || !startInput.value) startInput.value = current.start;
+    if (force || !endInput.value) endInput.value = current.end;
+    syncChips();
   }
 
-  shiftSelect.addEventListener("change", applyShiftDefaults);
-  applyShiftDefaults();
+  shiftSelect.addEventListener("change", () => applyShiftDefaults(false));
+  document.querySelectorAll("[data-shift-choice]").forEach((button) => {
+    button.addEventListener("click", () => {
+      shiftSelect.value = button.dataset.shiftChoice;
+      applyShiftDefaults(false);
+    });
+  });
+
+  applyShiftDefaults(false);
 </script>
 {% endblock %}
