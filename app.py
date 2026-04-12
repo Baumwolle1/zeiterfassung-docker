@@ -84,6 +84,8 @@ def create_app() -> Flask:
         selected_day = int(request.args.get("day", min(today.day, days_in_month)))
         selected_day = max(1, min(selected_day, days_in_month))
         selected_date = date(year, month, selected_day)
+        week_start = selected_date - timedelta(days=selected_date.weekday())
+        week_end = week_start + timedelta(days=6)
 
         month_entries = fetch_month_entries(year, month)
         days = []
@@ -124,8 +126,6 @@ def create_app() -> Flask:
         )
         selected_totals = calculate_totals(form_data["shift_type"], form_data["start_time"], form_data["end_time"])
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, form_data)
-        week_start = selected_date - timedelta(days=selected_date.weekday())
-        week_end = week_start + timedelta(days=6)
         visible_days = [
             item for item in days
             if view_mode == "month" or week_start <= item["date"] <= week_end
@@ -151,8 +151,9 @@ def create_app() -> Flask:
             month_balance=format_minutes(month_actual - month_target),
             week_start=week_start,
             week_end=week_end,
-            prev_month=month_nav(year, month, -1),
-            next_month=month_nav(year, month, 1),
+            week_label=f"KW {selected_date.isocalendar().week:02d}",
+            prev_period=period_nav(selected_date, view_mode, -1),
+            next_period=period_nav(selected_date, view_mode, 1),
         )
 
     @app.post("/save")
@@ -462,6 +463,35 @@ def month_nav(year: int, month: int, delta: int) -> dict:
         new_month = 1
         new_year += 1
     return {"year": new_year, "month": new_month}
+
+
+def period_nav(selected_date: date, view_mode: str, delta: int) -> dict:
+    if view_mode == "month":
+        target = date(selected_date.year, selected_date.month, 15)
+        shifted = shift_month(target, delta)
+        day = min(selected_date.day, calendar.monthrange(shifted.year, shifted.month)[1])
+        target_date = date(shifted.year, shifted.month, day)
+    else:
+        target_date = selected_date + timedelta(days=7 * delta)
+    return {
+        "year": target_date.year,
+        "month": target_date.month,
+        "day": target_date.day,
+        "view": view_mode,
+    }
+
+
+def shift_month(base: date, delta: int) -> date:
+    month = base.month + delta
+    year = base.year
+    while month < 1:
+        month += 12
+        year -= 1
+    while month > 12:
+        month -= 12
+        year += 1
+    day = min(base.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
 
 
 def build_month_pdf(year: int, month: int):
