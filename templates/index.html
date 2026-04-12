@@ -182,6 +182,57 @@
   const summaryActual = document.querySelector(".summary-card:nth-child(2) strong");
   const summaryBalance = document.querySelector(".summary-card:nth-child(3) strong");
   const summaryBreak = document.getElementById("summary-break");
+  const zeroHourTypes = ["Urlaub", "Feiertag", "Frei"];
+
+  function formatMinutes(totalMinutes) {
+    const sign = totalMinutes < 0 ? "-" : "";
+    const absolute = Math.abs(totalMinutes);
+    const hours = String(Math.floor(absolute / 60)).padStart(2, "0");
+    const minutes = String(absolute % 60).padStart(2, "0");
+    return `${sign}${hours}:${minutes}`;
+  }
+
+  function parseTime(value) {
+    const match = /^(\d{2}):(\d{2})$/.exec(value.trim());
+    if (!match) return null;
+    return Number(match[1]) * 60 + Number(match[2]);
+  }
+
+  function updateSummary() {
+    const key = shiftSelect.value;
+    const current = defaults[key];
+    if (zeroHourTypes.includes(key)) {
+      summaryTarget.textContent = "00:00";
+      summaryActual.textContent = "00:00";
+      summaryBalance.textContent = "00:00";
+      summaryBalance.className = "neutral";
+      summaryBreak.textContent = "00:00";
+      return;
+    }
+
+    const startMinutes = parseTime(startInput.value);
+    const endMinutes = parseTime(endInput.value);
+    const target = current.target;
+    const deductedBreak = current.break;
+    let actual = 0;
+    let balance = 0;
+
+    if (startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes) {
+      actual = Math.max(endMinutes - startMinutes - deductedBreak, 0);
+      balance = actual - target;
+    } else if (key === "Notdienst") {
+      actual = 0;
+      balance = 0;
+    } else {
+      balance = -target;
+    }
+
+    summaryTarget.textContent = formatMinutes(target);
+    summaryActual.textContent = formatMinutes(actual);
+    summaryBalance.textContent = formatMinutes(balance);
+    summaryBalance.className = balance > 0 ? "positive" : balance < 0 ? "negative" : "neutral";
+    summaryBreak.textContent = formatMinutes(deductedBreak);
+  }
 
   function syncChips() {
     document.querySelectorAll("[data-shift-choice]").forEach((button) => {
@@ -195,14 +246,18 @@
     const isWorkShift = ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst"].includes(key);
     startInput.disabled = !isWorkShift;
     endInput.disabled = !isWorkShift;
+    startNowButton.disabled = !isWorkShift;
+    endNowButton.disabled = !isWorkShift;
     if (!isWorkShift) {
       startInput.value = "";
       endInput.value = "";
+      updateSummary();
       syncChips();
       return;
     }
     if (force || !startInput.value) startInput.value = current.start;
     if (force || !endInput.value) endInput.value = current.end;
+    updateSummary();
     syncChips();
   }
 
@@ -248,6 +303,8 @@
 
   startNowButton.addEventListener("click", () => stampInto(startInput, "start"));
   endNowButton.addEventListener("click", () => stampInto(endInput, "end"));
+  startInput.addEventListener("input", updateSummary);
+  endInput.addEventListener("input", updateSummary);
 
   applyShiftDefaults(false);
 </script>
