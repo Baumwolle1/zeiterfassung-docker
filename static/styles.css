@@ -52,6 +52,10 @@ body {
   padding: 22px;
   margin-bottom: 16px;
 }
+.hero-bottom {
+  margin-top: 16px;
+  margin-bottom: 12px;
+}
 
 .eyebrow {
   margin: 0 0 6px;
@@ -94,6 +98,9 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
+}
+.summary-bottom {
+  margin-bottom: 8px;
 }
 
 .summary-card {
@@ -142,20 +149,24 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 }
 .week-toolbar strong {
   font-size: 0.98rem;
+  color: var(--muted);
 }
 .week-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 10px;
 }
 .week-actions form,
 .week-actions .button {
-  width: 100%;
+  width: auto;
 }
 .week-button {
-  background: rgba(255,255,255,0.86);
-  color: var(--text);
-  border: 1px solid rgba(147, 166, 191, 0.28);
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid rgba(75, 134, 255, 0.18);
+  box-shadow: none;
 }
 
 .month-header {
@@ -352,6 +363,11 @@ input:focus, select:focus, textarea:focus {
     flex-direction: column;
     align-items: stretch;
   }
-  .week-actions { grid-template-columns: 1fr; }
+  .week-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .week-actions form,
+  .week-actions .button { width: 100%; }
   .quick-types { display: grid; grid-template-columns: 1fr 1fr; }
 }
