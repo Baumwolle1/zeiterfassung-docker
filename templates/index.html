@@ -53,24 +53,21 @@
       </div>
 
       <div class="week-toolbar glass">
-        <div>
-          <strong>Woche {{ week_start.strftime("%d.%m.") }} - {{ week_end.strftime("%d.%m.") }}</strong>
-          <small>Mit einem Klick die ganze Woche vorbelegen. Freitag bleibt automatisch Freitag.</small>
-        </div>
+        <strong>Woche {{ week_start.strftime("%d.%m.") }} - {{ week_end.strftime("%d.%m.") }}</strong>
         <div class="week-actions">
           <form method="post" action="{{ url_for('apply_week_template') }}">
             <input type="hidden" name="year" value="{{ year }}">
             <input type="hidden" name="month" value="{{ month }}">
             <input type="hidden" name="day" value="{{ selected_day }}">
             <input type="hidden" name="template_type" value="Fruehschicht">
-            <button class="button tiny soft" type="submit">Woche Frueh</button>
+            <button class="button tiny week-button" type="submit">Frueh fuer Woche</button>
           </form>
           <form method="post" action="{{ url_for('apply_week_template') }}">
             <input type="hidden" name="year" value="{{ year }}">
             <input type="hidden" name="month" value="{{ month }}">
             <input type="hidden" name="day" value="{{ selected_day }}">
             <input type="hidden" name="template_type" value="Spaetschicht">
-            <button class="button tiny soft" type="submit">Woche Spaet</button>
+            <button class="button tiny week-button" type="submit">Spaet fuer Woche</button>
           </form>
         </div>
       </div>
@@ -136,6 +133,11 @@
           </label>
         </div>
 
+        <div class="stamp-actions">
+          <button class="button stamp-button" type="button" id="set-start-now">Arbeitsbeginn</button>
+          <button class="button stamp-button" type="button" id="set-end-now">Arbeitsende</button>
+        </div>
+
         <label>
           <span>Notiz</span>
           <textarea name="notes" rows="5" placeholder="Optional">{{ form_data.notes }}</textarea>
@@ -163,9 +165,12 @@
 </main>
 
 <script>
+  const form = document.querySelector(".entry-form");
   const shiftSelect = document.getElementById("shift_type");
   const startInput = document.getElementById("start_time");
   const endInput = document.getElementById("end_time");
+  const startNowButton = document.getElementById("set-start-now");
+  const endNowButton = document.getElementById("set-end-now");
   const defaults = {{ shift_config | tojson }};
 
   function syncChips() {
@@ -198,6 +203,21 @@
       applyShiftDefaults(false);
     });
   });
+
+  function currentTime() {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  }
+
+  function stampInto(target) {
+    target.value = currentTime();
+    form.requestSubmit();
+  }
+
+  startNowButton.addEventListener("click", () => stampInto(startInput));
+  endNowButton.addEventListener("click", () => stampInto(endInput));
 
   applyShiftDefaults(false);
 </script>
