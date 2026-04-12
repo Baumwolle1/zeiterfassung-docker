@@ -32,8 +32,8 @@ MONTH_NAMES = [
 WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 
 SHIFT_CONFIG = {
-    "Fruehschicht": {"label": "Fruehschicht", "target": 460, "break": 20, "start": "07:00", "end": "15:00"},
-    "Spaetschicht": {"label": "Spaetschicht", "target": 420, "break": 0, "start": "12:00", "end": "19:00"},
+    "Fruehschicht": {"label": "Frühschicht", "target": 460, "break": 20, "start": "07:00", "end": "15:00"},
+    "Spaetschicht": {"label": "Spätschicht", "target": 420, "break": 0, "start": "12:00", "end": "19:00"},
     "Freitag": {"label": "Freitag", "target": 360, "break": 0, "start": "07:00", "end": "13:00"},
     "Notdienst": {"label": "Notdienst", "target": 0, "break": 0, "start": "", "end": ""},
     "Urlaub": {"label": "Urlaub", "target": 0, "break": 0, "start": "", "end": ""},

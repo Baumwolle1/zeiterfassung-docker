@@ -81,14 +81,14 @@
           <input type="hidden" name="month" value="{{ month }}">
           <input type="hidden" name="day" value="{{ selected_day }}">
           <input type="hidden" name="template_type" value="Fruehschicht">
-          <button class="button week-apply-button" type="submit" aria-label="Woche auf Fruehschicht setzen">Fruehschicht</button>
+          <button class="button week-apply-button" type="submit" aria-label="Woche auf Frühschicht setzen">Frühschicht</button>
         </form>
         <form method="post" action="{{ url_for('apply_week_template') }}">
           <input type="hidden" name="year" value="{{ year }}">
           <input type="hidden" name="month" value="{{ month }}">
           <input type="hidden" name="day" value="{{ selected_day }}">
           <input type="hidden" name="template_type" value="Spaetschicht">
-          <button class="button week-apply-button" type="submit" aria-label="Woche auf Spaetschicht setzen">Spaetschicht</button>
+          <button class="button week-apply-button" type="submit" aria-label="Woche auf Spätschicht setzen">Spätschicht</button>
         </form>
       </div>
 
@@ -164,6 +164,10 @@
       <strong>{{ month_balance }}</strong>
     </article>
   </section>
+
+  <footer class="version-footer">
+    <span>Version 1.0</span>
+  </footer>
 </main>
 
 <script>

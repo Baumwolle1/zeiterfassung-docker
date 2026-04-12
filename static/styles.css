@@ -15,6 +15,10 @@
 }
 
 * { box-sizing: border-box; }
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 body {
   margin: 0;
   min-height: 100vh;
@@ -86,6 +90,8 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   border: 0;
   cursor: pointer;
   font-weight: 700;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .button.primary { background: linear-gradient(135deg, #4b86ff, #5ea2ff); color: white; }
@@ -119,7 +125,7 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 .month-panel, .form-panel { padding: 18px; }
 .week-apply-bar {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -137,10 +143,11 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   box-shadow: var(--shadow);
   font-size: 1rem;
   font-weight: 800;
+  line-height: 1.1;
 }
 .view-toggle {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   padding: 10px;
   margin-bottom: 12px;
@@ -159,6 +166,8 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   text-decoration: none;
   font-weight: 700;
   font-size: 0.98rem;
+  min-width: 0;
+  text-align: center;
 }
 .toggle-pill.active {
   background: var(--accent-soft);
@@ -366,8 +375,8 @@ input:focus, select:focus, textarea:focus {
   .hero-actions { width: 100%; }
   .hero-actions .button { width: 100%; }
   .summary-grid { grid-template-columns: 1fr 1fr; }
-  .week-apply-bar { grid-template-columns: 1fr 1fr; }
-  .view-toggle { grid-template-columns: 1fr; }
+  .week-apply-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .view-toggle { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .day-card { grid-template-columns: 52px 1fr; }
   .balance { grid-column: 2; justify-self: start; }
   .form-summary { grid-template-columns: 1fr; }
@@ -379,4 +388,17 @@ input:focus, select:focus, textarea:focus {
   }
   .week-range { text-align: left; }
   .quick-types { display: grid; grid-template-columns: 1fr 1fr; }
+  .week-apply-button,
+  .toggle-pill {
+    font-size: 0.88rem;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+@media (max-width: 390px) {
+  .week-apply-button,
+  .toggle-pill {
+    font-size: 0.82rem;
+  }
 }
