@@ -76,6 +76,9 @@ def create_app() -> Flask:
         year = int(request.args.get("year", today.year))
         month = int(request.args.get("month", today.month))
         month = max(1, min(month, 12))
+        view_mode = request.args.get("view", "week")
+        if view_mode not in {"week", "month"}:
+            view_mode = "week"
         _, days_in_month = calendar.monthrange(year, month)
 
         selected_day = int(request.args.get("day", min(today.day, days_in_month)))
@@ -123,14 +126,20 @@ def create_app() -> Flask:
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, form_data)
         week_start = selected_date - timedelta(days=selected_date.weekday())
         week_end = week_start + timedelta(days=6)
+        visible_days = [
+            item for item in days
+            if view_mode == "month" or week_start <= item["date"] <= week_end
+        ]
 
         return render_template(
             "index.html",
             year=year,
             month=month,
+            view_mode=view_mode,
             selected_date=selected_date,
             selected_day=selected_day,
             days=days,
+            visible_days=visible_days,
             form_data=form_data,
             selected_totals=selected_totals,
             today=today,
@@ -151,6 +160,7 @@ def create_app() -> Flask:
         year = int(request.form["year"])
         month = int(request.form["month"])
         day = int(request.form["day"])
+        view_mode = request.form.get("view", "week")
         selected_date = date(year, month, day)
 
         shift_type = request.form["shift_type"]
@@ -165,7 +175,7 @@ def create_app() -> Flask:
             start_time = ""
             end_time = ""
         save_entry(selected_date, shift_type, start_time, end_time, notes)
-        return redirect(url_for("index", year=year, month=month, day=day))
+        return redirect(url_for("index", year=year, month=month, day=day, view=view_mode))
 
     @app.post("/apply-week-template")
     def apply_week_template():
@@ -176,7 +186,7 @@ def create_app() -> Flask:
         selected_date = date(year, month, day)
 
         if template_type not in {"Fruehschicht", "Spaetschicht"}:
-            return redirect(url_for("index", year=year, month=month, day=day))
+            return redirect(url_for("index", year=year, month=month, day=day, view="week"))
 
         week_start = selected_date - timedelta(days=selected_date.weekday())
         for offset in range(7):
@@ -195,7 +205,7 @@ def create_app() -> Flask:
             defaults = SHIFT_CONFIG[template_type]
             save_entry(current, template_type, defaults["start"], defaults["end"], "")
 
-        return redirect(url_for("index", year=year, month=month, day=day))
+        return redirect(url_for("index", year=year, month=month, day=day, view="week"))
 
     @app.get("/export/pdf")
     def export_pdf():
