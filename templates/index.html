@@ -37,59 +37,6 @@
   </section>
 
   <section class="layout">
-    <aside class="glass month-panel">
-      <div class="month-header">
-        <a class="icon-button" href="{{ url_for('index', year=prev_month.year, month=prev_month.month, day=selected_day, view=view_mode) }}">&#8592;</a>
-        <div>
-          <h2>{{ month_names[month - 1] }} {{ year }}</h2>
-          <p>{% if view_mode == "week" %}Wochenansicht{% else %}Monatsansicht{% endif %}</p>
-        </div>
-        <a class="icon-button" href="{{ url_for('index', year=next_month.year, month=next_month.month, day=selected_day, view=view_mode) }}">&#8594;</a>
-      </div>
-
-      <div class="view-toggle glass">
-        <a class="toggle-pill {% if view_mode == 'week' %}active{% endif %}" href="{{ url_for('index', year=year, month=month, day=selected_day, view='week') }}">Diese Woche</a>
-        <a class="toggle-pill {% if view_mode == 'month' %}active{% endif %}" href="{{ url_for('index', year=year, month=month, day=selected_day, view='month') }}">Ganzer Monat</a>
-      </div>
-
-      <div class="week-toolbar glass">
-        <strong>Woche {{ week_start.strftime("%d.%m.") }} - {{ week_end.strftime("%d.%m.") }}</strong>
-        <div class="week-actions">
-          <form method="post" action="{{ url_for('apply_week_template') }}">
-            <input type="hidden" name="year" value="{{ year }}">
-            <input type="hidden" name="month" value="{{ month }}">
-            <input type="hidden" name="day" value="{{ selected_day }}">
-            <input type="hidden" name="template_type" value="Fruehschicht">
-            <button class="button tiny week-button" type="submit">Frueh fuer Woche</button>
-          </form>
-          <form method="post" action="{{ url_for('apply_week_template') }}">
-            <input type="hidden" name="year" value="{{ year }}">
-            <input type="hidden" name="month" value="{{ month }}">
-            <input type="hidden" name="day" value="{{ selected_day }}">
-            <input type="hidden" name="template_type" value="Spaetschicht">
-            <button class="button tiny week-button" type="submit">Spaet fuer Woche</button>
-          </form>
-        </div>
-      </div>
-
-      <div class="days">
-        {% for item in visible_days %}
-          <a class="day-card glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %}" href="{{ url_for('index', year=year, month=month, day=item.date.day, view=view_mode) }}">
-            <div class="day-number">{{ "%02d"|format(item.date.day) }}</div>
-            <div class="day-copy">
-              <strong>{{ item.weekday }}</strong>
-              <span>{{ shift_config[item.shift_type].label }}</span>
-              <small>Soll {{ item.target_text }} | Ist {{ item.actual_text }}</small>
-              {% if item.holiday_name %}
-                <em>{{ item.holiday_name }}</em>
-              {% endif %}
-            </div>
-            <div class="balance {{ item.balance_class }}">{{ item.balance_text }}</div>
-          </a>
-        {% endfor %}
-      </div>
-    </aside>
-
     <section class="glass form-panel">
       <div class="panel-head">
         <div>
@@ -146,7 +93,7 @@
         <div class="form-summary glass">
           <div>
             <span>Pause</span>
-            <strong>{{ format_minutes(selected_totals.deducted_break) }}</strong>
+            <strong id="summary-break">{{ format_minutes(selected_totals.deducted_break) }}</strong>
           </div>
           <div>
             <span>Woche</span>
@@ -161,6 +108,59 @@
         <button class="button primary" type="submit">Speichern</button>
       </form>
     </section>
+
+    <aside class="glass month-panel">
+      <div class="month-header">
+        <a class="icon-button" href="{{ url_for('index', year=prev_month.year, month=prev_month.month, day=selected_day, view=view_mode) }}">&#8592;</a>
+        <div>
+          <h2>{{ month_names[month - 1] }} {{ year }}</h2>
+          <p>{% if view_mode == "week" %}Wochenansicht{% else %}Monatsansicht{% endif %}</p>
+        </div>
+        <a class="icon-button" href="{{ url_for('index', year=next_month.year, month=next_month.month, day=selected_day, view=view_mode) }}">&#8594;</a>
+      </div>
+
+      <div class="view-toggle glass">
+        <a class="toggle-pill {% if view_mode == 'week' %}active{% endif %}" href="{{ url_for('index', year=year, month=month, day=selected_day, view='week') }}">Diese Woche</a>
+        <a class="toggle-pill {% if view_mode == 'month' %}active{% endif %}" href="{{ url_for('index', year=year, month=month, day=selected_day, view='month') }}">Ganzer Monat</a>
+      </div>
+
+      <div class="week-toolbar glass">
+        <strong>Woche {{ week_start.strftime("%d.%m.") }} - {{ week_end.strftime("%d.%m.") }}</strong>
+        <div class="week-actions">
+          <form method="post" action="{{ url_for('apply_week_template') }}">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="month" value="{{ month }}">
+            <input type="hidden" name="day" value="{{ selected_day }}">
+            <input type="hidden" name="template_type" value="Fruehschicht">
+            <button class="button tiny week-button" type="submit">Frueh</button>
+          </form>
+          <form method="post" action="{{ url_for('apply_week_template') }}">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="month" value="{{ month }}">
+            <input type="hidden" name="day" value="{{ selected_day }}">
+            <input type="hidden" name="template_type" value="Spaetschicht">
+            <button class="button tiny week-button" type="submit">Spaet</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="days">
+        {% for item in visible_days %}
+          <a class="day-card glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %}" href="{{ url_for('index', year=year, month=month, day=item.date.day, view=view_mode) }}">
+            <div class="day-number">{{ "%02d"|format(item.date.day) }}</div>
+            <div class="day-copy">
+              <strong>{{ item.weekday }}</strong>
+              <span>{{ shift_config[item.shift_type].label }}</span>
+              <small>Soll {{ item.target_text }} | Ist {{ item.actual_text }}</small>
+              {% if item.holiday_name %}
+                <em>{{ item.holiday_name }}</em>
+              {% endif %}
+            </div>
+            <div class="balance {{ item.balance_class }}">{{ item.balance_text }}</div>
+          </a>
+        {% endfor %}
+      </div>
+    </aside>
   </section>
 </main>
 
@@ -172,6 +172,10 @@
   const startNowButton = document.getElementById("set-start-now");
   const endNowButton = document.getElementById("set-end-now");
   const defaults = {{ shift_config | tojson }};
+  const summaryTarget = document.querySelector(".summary-card:nth-child(1) strong");
+  const summaryActual = document.querySelector(".summary-card:nth-child(2) strong");
+  const summaryBalance = document.querySelector(".summary-card:nth-child(3) strong");
+  const summaryBreak = document.getElementById("summary-break");
 
   function syncChips() {
     document.querySelectorAll("[data-shift-choice]").forEach((button) => {
@@ -211,13 +215,33 @@
     return `${hours}:${minutes}`;
   }
 
-  function stampInto(target) {
-    target.value = currentTime();
-    form.requestSubmit();
+  async function stampInto(target, field) {
+    const value = currentTime();
+    target.value = value;
+    const response = await fetch("{{ url_for('quick_stamp') }}", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        year: "{{ year }}",
+        month: "{{ month }}",
+        day: "{{ selected_day }}",
+        field,
+        value,
+      }),
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    startInput.value = data.start_time;
+    endInput.value = data.end_time;
+    summaryTarget.textContent = data.target;
+    summaryActual.textContent = data.actual;
+    summaryBalance.textContent = data.balance;
+    summaryBalance.className = data.balance_class;
+    summaryBreak.textContent = data.break;
   }
 
-  startNowButton.addEventListener("click", () => stampInto(startInput));
-  endNowButton.addEventListener("click", () => stampInto(endInput));
+  startNowButton.addEventListener("click", () => stampInto(startInput, "start"));
+  endNowButton.addEventListener("click", () => stampInto(endInput, "end"));
 
   applyShiftDefaults(false);
 </script>
