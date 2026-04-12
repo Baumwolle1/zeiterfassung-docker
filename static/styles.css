@@ -18,12 +18,18 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  scroll-behavior: smooth;
 }
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   font-family: "Segoe UI", "SF Pro Display", sans-serif;
+  line-height: 1.45;
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   background:
     radial-gradient(circle at top left, rgba(129, 170, 255, 0.28), transparent 28%),
     radial-gradient(circle at top right, rgba(162, 224, 206, 0.24), transparent 22%),
@@ -31,9 +37,9 @@ body {
 }
 
 .shell {
-  width: min(1240px, calc(100vw - 24px));
+  width: min(1240px, calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));
   margin: 0 auto;
-  padding: 18px 0 36px;
+  padding: max(18px, env(safe-area-inset-top)) 0 max(36px, env(safe-area-inset-bottom));
 }
 
 .glass {
@@ -77,9 +83,13 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: stretch;
 }
 .inline-form {
   margin: 0;
+}
+.hero-actions > * {
+  min-width: 0;
 }
 
 .button {
@@ -95,6 +105,7 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   font-weight: 700;
   min-width: 0;
   white-space: nowrap;
+  text-align: center;
 }
 
 .button.primary { background: linear-gradient(135deg, #4b86ff, #5ea2ff); color: white; }
@@ -114,9 +125,14 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 
 .summary-card {
   padding: 18px;
+  min-width: 0;
 }
 .summary-card span { display: block; color: var(--muted); margin-bottom: 8px; }
-.summary-card strong { font-size: 1.5rem; }
+.summary-card strong {
+  display: block;
+  font-size: clamp(1.2rem, 2vw, 1.5rem);
+  overflow-wrap: anywhere;
+}
 
 .layout {
   display: grid;
@@ -217,9 +233,10 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 .days {
   display: grid;
   gap: 10px;
-  max-height: 74vh;
+  max-height: min(74vh, 74dvh, 860px);
   overflow: auto;
   padding-right: 4px;
+  overscroll-behavior: contain;
 }
 
 .day-card {
@@ -253,6 +270,11 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 
 .day-copy { display: grid; gap: 3px; }
 .day-copy span, .day-copy small { color: var(--muted); }
+.day-copy strong,
+.day-copy span,
+.day-copy small {
+  overflow-wrap: anywhere;
+}
 .day-copy em {
   color: var(--accent);
   font-style: normal;
@@ -303,7 +325,10 @@ input, select, textarea {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.9);
   font: inherit;
+  font-size: 16px;
   color: var(--text);
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 textarea { resize: vertical; min-height: 120px; }
@@ -368,6 +393,8 @@ input:focus, select:focus, textarea:focus {
 
 .login-shell {
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 20px;
@@ -406,11 +433,34 @@ input:focus, select:focus, textarea:focus {
   .days { max-height: none; }
 }
 
+@media (max-width: 1180px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .days {
+    max-height: none;
+  }
+}
+
 @media (max-width: 640px) {
-  .shell { width: min(100vw - 16px, 100%); padding-top: 10px; }
+  .shell {
+    width: min(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right), 100%);
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
   .hero { padding: 18px; border-radius: 24px; flex-direction: column; align-items: stretch; }
   .hero-actions { width: 100%; }
-  .hero-actions .button { width: 100%; }
+  .hero-actions .button,
+  .hero-actions .inline-form {
+    width: 100%;
+  }
+  .hero-actions .inline-form .button {
+    width: 100%;
+  }
   .summary-grid { grid-template-columns: 1fr 1fr; }
   .week-apply-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .view-toggle { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -434,6 +484,15 @@ input:focus, select:focus, textarea:focus {
 }
 
 @media (max-width: 390px) {
+  .shell {
+    width: min(100vw - 12px - env(safe-area-inset-left) - env(safe-area-inset-right), 100%);
+  }
+
+  .summary-grid,
+  .quick-types {
+    grid-template-columns: 1fr;
+  }
+
   .week-apply-button,
   .toggle-pill {
     font-size: 0.82rem;
