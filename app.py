@@ -73,6 +73,9 @@ def create_app() -> Flask:
     @app.get("/")
     def index():
         today = date.today()
+        if not request.args:
+            return redirect(url_for("index", year=today.year, month=today.month, day=today.day, view="week"))
+
         year = int(request.args.get("year", today.year))
         month = int(request.args.get("month", today.month))
         month = max(1, min(month, 12))
@@ -177,6 +180,53 @@ def create_app() -> Flask:
             end_time = ""
         save_entry(selected_date, shift_type, start_time, end_time, notes)
         return redirect(url_for("index", year=year, month=month, day=day, view=view_mode))
+
+    @app.post("/save-json")
+    def save_json():
+        payload = request.get_json(force=True)
+        year = int(payload["year"])
+        month = int(payload["month"])
+        day = int(payload["day"])
+        view_mode = payload.get("view", "week")
+        selected_date = date(year, month, day)
+
+        shift_type = payload.get("shift_type", default_type_for(selected_date))
+        start_time = normalize_time(payload.get("start_time", ""))
+        end_time = normalize_time(payload.get("end_time", ""))
+        notes = (payload.get("notes", "") or "").strip()
+
+        if shift_type not in SHIFT_CONFIG:
+            shift_type = default_type_for(selected_date)
+
+        if shift_type not in WORK_TYPES:
+            start_time = ""
+            end_time = ""
+
+        save_entry(selected_date, shift_type, start_time, end_time, notes)
+        entry = {"shift_type": shift_type, "start_time": start_time, "end_time": end_time, "notes": notes}
+        totals = calculate_totals(shift_type, start_time, end_time)
+        month_entries = fetch_month_entries(year, month)
+        week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, entry)
+        return jsonify(
+            {
+                "ok": True,
+                "shift_type": shift_type,
+                "start_time": start_time,
+                "end_time": end_time,
+                "notes": notes,
+                "target": format_minutes(totals.target),
+                "actual": format_minutes(totals.actual),
+                "balance": format_minutes(totals.balance),
+                "break": format_minutes(totals.deducted_break),
+                "balance_class": balance_class(totals.balance),
+                "week_balance": format_minutes(week_actual - week_target),
+                "month_balance": format_minutes(month_actual - month_target),
+                "day_href": url_for("index", year=year, month=month, day=day, view=view_mode),
+                "day_target": format_minutes(totals.target),
+                "day_actual": format_minutes(totals.actual),
+                "day_balance": format_minutes(totals.balance),
+            }
+        )
 
     @app.post("/apply-week-template")
     def apply_week_template():

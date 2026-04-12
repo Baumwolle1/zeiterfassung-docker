@@ -62,15 +62,15 @@
           </div>
           <div>
             <span>Woche</span>
-            <strong>{{ week_balance }}</strong>
+            <strong id="summary-week">{{ week_balance }}</strong>
           </div>
           <div>
             <span>Monat</span>
-            <strong>{{ month_balance }}</strong>
+            <strong id="summary-month">{{ month_balance }}</strong>
           </div>
         </div>
 
-        <button class="button primary" type="submit">Speichern</button>
+        <button class="button primary" type="submit" hidden aria-hidden="true" tabindex="-1">Speichern</button>
       </form>
     </section>
 
@@ -113,17 +113,17 @@
 
       <div class="days">
         {% for item in visible_days %}
-          <a class="day-card glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %}" href="{{ url_for('index', year=year, month=month, day=item.date.day, view=view_mode) }}">
+          <a class="day-card glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %}" data-day-card {% if item.is_selected %}data-selected-day-card{% endif %} href="{{ url_for('index', year=year, month=month, day=item.date.day, view=view_mode) }}">
             <div class="day-number">{{ "%02d"|format(item.date.day) }}</div>
             <div class="day-copy">
               <strong>{{ item.weekday }}</strong>
-              <span>{{ shift_config[item.shift_type].label }}</span>
-              <small>Soll {{ item.target_text }} | Ist {{ item.actual_text }}</small>
+              <span data-day-type>{{ shift_config[item.shift_type].label }}</span>
+              <small data-day-times>Soll {{ item.target_text }} | Ist {{ item.actual_text }}</small>
               {% if item.holiday_name %}
                 <em>{{ item.holiday_name }}</em>
               {% endif %}
             </div>
-            <div class="balance {{ item.balance_class }}">{{ item.balance_text }}</div>
+            <div class="balance {{ item.balance_class }}" data-day-balance>{{ item.balance_text }}</div>
           </a>
         {% endfor %}
       </div>
@@ -157,11 +157,11 @@
     </article>
     <article class="summary-card glass">
       <span>Woche</span>
-      <strong>{{ week_balance }}</strong>
+      <strong id="summary-week-bottom">{{ week_balance }}</strong>
     </article>
     <article class="summary-card glass">
       <span>Monat</span>
-      <strong>{{ month_balance }}</strong>
+      <strong id="summary-month-bottom">{{ month_balance }}</strong>
     </article>
   </section>
 
@@ -182,7 +182,16 @@
   const summaryActual = document.querySelector(".summary-card:nth-child(2) strong");
   const summaryBalance = document.querySelector(".summary-card:nth-child(3) strong");
   const summaryBreak = document.getElementById("summary-break");
+  const summaryWeek = document.getElementById("summary-week");
+  const summaryMonth = document.getElementById("summary-month");
+  const summaryWeekBottom = document.getElementById("summary-week-bottom");
+  const summaryMonthBottom = document.getElementById("summary-month-bottom");
+  const selectedDayCard = document.querySelector("[data-selected-day-card]");
+  const notesInput = form.querySelector('textarea[name="notes"]');
   const zeroHourTypes = ["Urlaub", "Feiertag", "Frei"];
+  let autosaveTimer = null;
+  let saveRequestId = 0;
+  let latestAppliedRequestId = 0;
 
   function formatMinutes(totalMinutes) {
     const sign = totalMinutes < 0 ? "-" : "";
@@ -234,6 +243,70 @@
     summaryBreak.textContent = formatMinutes(deductedBreak);
   }
 
+  function applySavedState(data) {
+    if (data.start_time !== undefined) startInput.value = data.start_time;
+    if (data.end_time !== undefined) endInput.value = data.end_time;
+    if (data.shift_type !== undefined) shiftSelect.value = data.shift_type;
+    if (data.notes !== undefined) notesInput.value = data.notes;
+
+    summaryTarget.textContent = data.target;
+    summaryActual.textContent = data.actual;
+    summaryBalance.textContent = data.balance;
+    summaryBalance.className = data.balance_class;
+    summaryBreak.textContent = data.break;
+    summaryWeek.textContent = data.week_balance;
+    summaryMonth.textContent = data.month_balance;
+    summaryWeekBottom.textContent = data.week_balance;
+    summaryMonthBottom.textContent = data.month_balance;
+
+    if (selectedDayCard) {
+      selectedDayCard.href = data.day_href;
+      selectedDayCard.querySelector("[data-day-type]").textContent = defaults[data.shift_type].label;
+      selectedDayCard.querySelector("[data-day-times]").textContent = `Soll ${data.day_target} | Ist ${data.day_actual}`;
+      const dayBalance = selectedDayCard.querySelector("[data-day-balance]");
+      dayBalance.textContent = data.day_balance;
+      dayBalance.className = `balance ${data.balance_class}`;
+    }
+
+    applyShiftDefaults(false);
+  }
+
+  async function saveForm({ immediate = false } = {}) {
+    clearTimeout(autosaveTimer);
+
+    const runSave = async () => {
+      const requestId = ++saveRequestId;
+      const response = await fetch("{{ url_for('save_json') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          year: form.elements.year.value,
+          month: form.elements.month.value,
+          day: form.elements.day.value,
+          view: form.elements.view.value,
+          shift_type: shiftSelect.value,
+          start_time: startInput.value,
+          end_time: endInput.value,
+          notes: notesInput.value,
+        }),
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data.ok || requestId < latestAppliedRequestId) return;
+      latestAppliedRequestId = requestId;
+      applySavedState(data);
+    };
+
+    if (immediate) {
+      await runSave();
+      return;
+    }
+
+    autosaveTimer = setTimeout(() => {
+      runSave();
+    }, 350);
+  }
+
   function syncChips() {
     document.querySelectorAll("[data-shift-choice]").forEach((button) => {
       button.classList.toggle("active", button.dataset.shiftChoice === shiftSelect.value);
@@ -261,11 +334,15 @@
     syncChips();
   }
 
-  shiftSelect.addEventListener("change", () => applyShiftDefaults(false));
+  shiftSelect.addEventListener("change", async () => {
+    applyShiftDefaults(false);
+    await saveForm({ immediate: true });
+  });
   document.querySelectorAll("[data-shift-choice]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       shiftSelect.value = button.dataset.shiftChoice;
       applyShiftDefaults(false);
+      await saveForm({ immediate: true });
     });
   });
 
@@ -279,32 +356,28 @@
   async function stampInto(target, field) {
     const value = currentTime();
     target.value = value;
-    const response = await fetch("{{ url_for('quick_stamp') }}", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        year: "{{ year }}",
-        month: "{{ month }}",
-        day: "{{ selected_day }}",
-        field,
-        value,
-      }),
-    });
-    if (!response.ok) return;
-    const data = await response.json();
-    startInput.value = data.start_time;
-    endInput.value = data.end_time;
-    summaryTarget.textContent = data.target;
-    summaryActual.textContent = data.actual;
-    summaryBalance.textContent = data.balance;
-    summaryBalance.className = data.balance_class;
-    summaryBreak.textContent = data.break;
+    updateSummary();
+    await saveForm({ immediate: true });
   }
 
   startNowButton.addEventListener("click", () => stampInto(startInput, "start"));
   endNowButton.addEventListener("click", () => stampInto(endInput, "end"));
-  startInput.addEventListener("input", updateSummary);
-  endInput.addEventListener("input", updateSummary);
+  startInput.addEventListener("input", () => {
+    updateSummary();
+    saveForm();
+  });
+  endInput.addEventListener("input", () => {
+    updateSummary();
+    saveForm();
+  });
+  startInput.addEventListener("blur", () => saveForm({ immediate: true }));
+  endInput.addEventListener("blur", () => saveForm({ immediate: true }));
+  notesInput.addEventListener("input", () => saveForm());
+  notesInput.addEventListener("blur", () => saveForm({ immediate: true }));
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveForm({ immediate: true });
+  });
 
   applyShiftDefaults(false);
 </script>
