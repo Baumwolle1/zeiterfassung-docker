@@ -121,52 +121,60 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  padding: 8px;
+  padding: 10px;
   margin-bottom: 12px;
+  background: rgba(255,255,255,0.86);
+  border-radius: 22px;
+  border: 1px solid rgba(147, 166, 191, 0.22);
 }
 .toggle-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
+  min-height: 46px;
   padding: 0 14px;
   border-radius: 16px;
   color: var(--muted);
   text-decoration: none;
   font-weight: 700;
+  font-size: 0.98rem;
 }
 .toggle-pill.active {
   background: var(--accent-soft);
   color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(75, 134, 255, 0.18);
 }
 .week-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 12px 14px;
+  padding: 14px;
   margin-bottom: 14px;
 }
 .week-toolbar strong {
-  font-size: 0.98rem;
+  font-size: 1rem;
   color: var(--muted);
 }
 .week-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
+  min-width: 220px;
 }
 .week-actions form,
 .week-actions .button {
-  width: auto;
+  width: 100%;
 }
 .week-button {
-  min-height: 38px;
-  padding: 0 14px;
-  border-radius: 14px;
-  background: transparent;
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.92);
   color: var(--accent);
-  border: 1px solid rgba(75, 134, 255, 0.18);
-  box-shadow: none;
+  border: 1px solid rgba(75, 134, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5);
+  font-weight: 800;
 }
 
 .month-header {
@@ -364,8 +372,8 @@ input:focus, select:focus, textarea:focus {
     align-items: stretch;
   }
   .week-actions {
-    display: grid;
     grid-template-columns: 1fr 1fr;
+    min-width: 0;
   }
   .week-actions form,
   .week-actions .button { width: 100%; }
