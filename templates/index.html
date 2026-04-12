@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="shell">
+  <section class="hero glass">
+    <div>
+      <p class="eyebrow">Mobile Zeiterfassung</p>
+      <h1>{{ app_title }}</h1>
+      <p class="subtitle">Optimiert für Handy, Tablet und Portainer-Deployment auf deinem NAS.</p>
+    </div>
+    <a class="button dark" href="{{ url_for('export_pdf', year=year, month=month) }}">Monat als PDF</a>
+  </section>
+
+  <section class="summary-grid">
+    <article class="summary-card glass">
+      <span>Heute Soll</span>
+      <strong>{{ format_minutes(selected_totals.target) }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Heute Ist</span>
+      <strong class="positive">{{ format_minutes(selected_totals.actual) }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Heute Saldo</span>
+      <strong class="{{ balance_class(selected_totals.balance) }}">{{ format_minutes(selected_totals.balance) }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Woche</span>
+      <strong>{{ week_balance }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Monat</span>
+      <strong>{{ month_balance }}</strong>
+    </article>
+  </section>
+
+  <section class="layout">
+    <aside class="glass month-panel">
+      <div class="month-header">
+        <a class="icon-button" href="{{ url_for('index', year=prev_month.year, month=prev_month.month, day=selected_day) }}">&#8592;</a>
+        <div>
+          <h2>{{ month_names[month - 1] }} {{ year }}</h2>
+          <p>{{ days|length }} Tage</p>
+        </div>
+        <a class="icon-button" href="{{ url_for('index', year=next_month.year, month=next_month.month, day=selected_day) }}">&#8594;</a>
+      </div>
+
+      <div class="days">
+        {% for item in days %}
+          <a class="day-card glass {% if item.is_selected %}selected{% endif %}" href="{{ url_for('index', year=year, month=month, day=item.date.day) }}">
+            <div class="day-number">{{ "%02d"|format(item.date.day) }}</div>
+            <div class="day-copy">
+              <strong>{{ item.weekday }}</strong>
+              <span>{{ shift_config[item.shift_type].label }}</span>
+              <small>Soll {{ item.target_text }} | Ist {{ item.actual_text }}</small>
+            </div>
+            <div class="balance {{ item.balance_class }}">{{ item.balance_text }}</div>
+          </a>
+        {% endfor %}
+      </div>
+    </aside>
+
+    <section class="glass form-panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Ausgewählter Tag</p>
+          <h2>{{ weekday_names[selected_date.weekday()] }}, {{ selected_date.strftime("%d.%m.%Y") }}</h2>
+        </div>
+      </div>
+
+      <form method="post" action="{{ url_for('save') }}" class="entry-form">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="month" value="{{ month }}">
+        <input type="hidden" name="day" value="{{ selected_day }}">
+
+        <label>
+          <span>Schicht / Status</span>
+          <select name="shift_type" id="shift_type">
+            {% for key, config in shift_config.items() %}
+              <option value="{{ key }}" {% if form_data.shift_type == key %}selected{% endif %}>{{ config.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <div class="time-grid">
+          <label>
+            <span>Beginn</span>
+            <input data-time-input type="text" name="start_time" id="start_time" value="{{ form_data.start_time }}" placeholder="07:00">
+          </label>
+          <label>
+            <span>Ende</span>
+            <input data-time-input type="text" name="end_time" id="end_time" value="{{ form_data.end_time }}" placeholder="15:00">
+          </label>
+        </div>
+
+        <label>
+          <span>Notiz</span>
+          <textarea name="notes" rows="5" placeholder="Optional">{{ form_data.notes }}</textarea>
+        </label>
+
+        <div class="form-summary glass">
+          <div>
+            <span>Pause</span>
+            <strong>{{ format_minutes(selected_totals.deducted_break) }}</strong>
+          </div>
+          <div>
+            <span>Woche</span>
+            <strong>{{ week_balance }}</strong>
+          </div>
+          <div>
+            <span>Monat</span>
+            <strong>{{ month_balance }}</strong>
+          </div>
+        </div>
+
+        <button class="button primary" type="submit">Speichern</button>
+      </form>
+    </section>
+  </section>
+</main>
+
+<script>
+  const shiftSelect = document.getElementById("shift_type");
+  const startInput = document.getElementById("start_time");
+  const endInput = document.getElementById("end_time");
+  const defaults = {{ shift_config | tojson }};
+
+  function applyShiftDefaults() {
+    const key = shiftSelect.value;
+    const current = defaults[key];
+    const isWorkShift = ["Fruehschicht", "Spaetschicht", "Freitag"].includes(key);
+    startInput.disabled = !isWorkShift;
+    endInput.disabled = !isWorkShift;
+    if (!isWorkShift) {
+      startInput.value = "";
+      endInput.value = "";
+      return;
+    }
+    if (!startInput.value) startInput.value = current.start;
+    if (!endInput.value) endInput.value = current.end;
+  }
+
+  shiftSelect.addEventListener("change", applyShiftDefaults);
+  applyShiftDefaults();
+</script>
+{% endblock %}
