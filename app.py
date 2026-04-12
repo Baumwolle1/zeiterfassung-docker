@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, redirect, render_template, request, send_file, url_for
+from flask import Flask, jsonify, redirect, render_template, request, send_file, url_for
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
@@ -214,6 +214,59 @@ def create_app() -> Flask:
         pdf_bytes = build_month_pdf(year, month)
         filename = f"Zeiterfassung_{year}_{month:02d}.pdf"
         return send_file(pdf_bytes, mimetype="application/pdf", as_attachment=True, download_name=filename)
+
+    @app.post("/quick-stamp")
+    def quick_stamp():
+        payload = request.get_json(force=True)
+        year = int(payload["year"])
+        month = int(payload["month"])
+        day = int(payload["day"])
+        field = payload["field"]
+        value = normalize_time(payload["value"])
+        selected_date = date(year, month, day)
+
+        entry = fetch_entry(selected_date)
+        if entry:
+            shift_type = entry["shift_type"]
+            start_time = entry["start_time"]
+            end_time = entry["end_time"]
+            notes = entry["notes"]
+        else:
+            shift_type = default_type_for(selected_date)
+            start_time = SHIFT_CONFIG[shift_type]["start"]
+            end_time = SHIFT_CONFIG[shift_type]["end"]
+            notes = ""
+
+        if field == "start":
+            start_time = value
+        elif field == "end":
+            end_time = value
+        else:
+            return jsonify({"ok": False}), 400
+
+        if shift_type not in WORK_TYPES:
+            shift_type = default_type_for(selected_date)
+            if shift_type not in WORK_TYPES:
+                shift_type = "Fruehschicht"
+            if not start_time:
+                start_time = SHIFT_CONFIG[shift_type]["start"]
+            if not end_time:
+                end_time = SHIFT_CONFIG[shift_type]["end"]
+
+        save_entry(selected_date, shift_type, start_time, end_time, notes)
+        totals = calculate_totals(shift_type, start_time, end_time)
+        return jsonify(
+            {
+                "ok": True,
+                "start_time": start_time,
+                "end_time": end_time,
+                "target": format_minutes(totals.target),
+                "actual": format_minutes(totals.actual),
+                "balance": format_minutes(totals.balance),
+                "break": format_minutes(totals.deducted_break),
+                "balance_class": balance_class(totals.balance),
+            }
+        )
 
     return app
 
