@@ -104,8 +104,9 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(310px, 0.95fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(310px, 0.95fr);
   gap: 16px;
+  align-items: start;
 }
 
 .month-panel, .form-panel { padding: 18px; }
