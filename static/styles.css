@@ -414,12 +414,20 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   align-items: center;
   gap: 10px;
+  cursor: pointer;
 }
 
 .remember-row input {
   width: 20px;
   height: 20px;
   margin: 0;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  appearance: auto;
+  -webkit-appearance: checkbox;
 }
 
 .form-error {
