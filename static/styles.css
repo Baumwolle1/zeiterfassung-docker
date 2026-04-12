@@ -132,17 +132,15 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   color: var(--accent);
 }
 .week-toolbar {
-  display: grid;
-  gap: 12px;
-  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
   margin-bottom: 14px;
 }
 .week-toolbar strong {
-  display: block;
-  margin-bottom: 4px;
-}
-.week-toolbar small {
-  color: var(--muted);
+  font-size: 0.98rem;
 }
 .week-actions {
   display: grid;
@@ -152,6 +150,11 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
 .week-actions form,
 .week-actions .button {
   width: 100%;
+}
+.week-button {
+  background: rgba(255,255,255,0.86);
+  color: var(--text);
+  border: 1px solid rgba(147, 166, 191, 0.28);
 }
 
 .month-header {
@@ -277,6 +280,17 @@ input:focus, select:focus, textarea:focus {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+.stamp-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.stamp-button {
+  min-height: 52px;
+  border: 1px solid rgba(75, 134, 255, 0.24);
+  background: linear-gradient(135deg, rgba(75, 134, 255, 0.12), rgba(94, 162, 255, 0.22));
+  color: var(--accent);
+}
 .quick-types {
   display: flex;
   gap: 10px;
@@ -332,6 +346,11 @@ input:focus, select:focus, textarea:focus {
   .balance { grid-column: 2; justify-self: start; }
   .form-summary { grid-template-columns: 1fr; }
   .time-grid { grid-template-columns: 1fr; }
+  .stamp-actions { grid-template-columns: 1fr; }
+  .week-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .week-actions { grid-template-columns: 1fr; }
   .quick-types { display: grid; grid-template-columns: 1fr 1fr; }
 }
