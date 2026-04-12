@@ -9,20 +9,23 @@
   <body>
     {% block content %}{% endblock %}
     <script>
-      const scrollKey = `zeiterfassung-scroll:${location.pathname}${location.search}`;
+      history.scrollRestoration = "manual";
+      const scrollKey = `zeiterfassung-scroll:${location.pathname}`;
 
       const restoreScroll = () => {
         const saved = sessionStorage.getItem(scrollKey);
         if (!saved) return;
-        requestAnimationFrame(() => {
-          window.scrollTo(0, Number(saved));
-        });
+        requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, Number(saved))));
       };
 
       const rememberScroll = () => {
         sessionStorage.setItem(scrollKey, String(window.scrollY));
       };
 
+      window.addEventListener("scroll", rememberScroll, { passive: true });
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") rememberScroll();
+      });
       window.addEventListener("load", restoreScroll);
       window.addEventListener("beforeunload", rememberScroll);
       document.addEventListener("click", (event) => {
