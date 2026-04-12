@@ -75,6 +75,23 @@
     </section>
 
     <aside class="glass month-panel">
+      <div class="week-apply-bar">
+        <form method="post" action="{{ url_for('apply_week_template') }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          <input type="hidden" name="day" value="{{ selected_day }}">
+          <input type="hidden" name="template_type" value="Fruehschicht">
+          <button class="button week-apply-button" type="submit" aria-label="Woche auf Fruehschicht setzen">Fruehschicht</button>
+        </form>
+        <form method="post" action="{{ url_for('apply_week_template') }}">
+          <input type="hidden" name="year" value="{{ year }}">
+          <input type="hidden" name="month" value="{{ month }}">
+          <input type="hidden" name="day" value="{{ selected_day }}">
+          <input type="hidden" name="template_type" value="Spaetschicht">
+          <button class="button week-apply-button" type="submit" aria-label="Woche auf Spaetschicht setzen">Spaetschicht</button>
+        </form>
+      </div>
+
       <div class="month-header">
         <a class="icon-button" href="{{ url_for('index', year=prev_period.year, month=prev_period.month, day=prev_period.day, view=prev_period.view) }}">&#8592;</a>
         <div>
@@ -91,22 +108,7 @@
 
       <div class="week-toolbar glass">
         <strong>{{ week_label }}</strong>
-        <div class="week-actions">
-          <form method="post" action="{{ url_for('apply_week_template') }}">
-            <input type="hidden" name="year" value="{{ year }}">
-            <input type="hidden" name="month" value="{{ month }}">
-            <input type="hidden" name="day" value="{{ selected_day }}">
-            <input type="hidden" name="template_type" value="Fruehschicht">
-            <button class="button week-button" type="submit" aria-label="Woche auf Fruehschicht setzen">Frueh</button>
-          </form>
-          <form method="post" action="{{ url_for('apply_week_template') }}">
-            <input type="hidden" name="year" value="{{ year }}">
-            <input type="hidden" name="month" value="{{ month }}">
-            <input type="hidden" name="day" value="{{ selected_day }}">
-            <input type="hidden" name="template_type" value="Spaetschicht">
-            <button class="button week-button" type="submit" aria-label="Woche auf Spaetschicht setzen">Spaet</button>
-          </form>
-        </div>
+        <span class="week-range">{{ week_start.strftime("%d.%m.") }} - {{ week_end.strftime("%d.%m.") }}</span>
       </div>
 
       <div class="days">
