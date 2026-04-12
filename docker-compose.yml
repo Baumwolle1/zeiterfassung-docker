@@ -4,6 +4,6 @@ services:
     container_name: zeiterfassung
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8091:8080"
     volumes:
       - ./data:/app/data
