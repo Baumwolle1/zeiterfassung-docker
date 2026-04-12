@@ -222,12 +222,15 @@
     const startMinutes = parseTime(startInput.value);
     const endMinutes = parseTime(endInput.value);
     const target = current.target;
-    const deductedBreak = current.break;
+    const workedMinutes = startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes
+      ? endMinutes - startMinutes
+      : 0;
+    const deductedBreak = workedMinutes > 360 ? current.break : 0;
     let actual = 0;
     let balance = 0;
 
     if (startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes) {
-      actual = Math.max(endMinutes - startMinutes - deductedBreak, 0);
+      actual = Math.max(workedMinutes - deductedBreak, 0);
       balance = actual - target;
     } else if (key === "Notdienst") {
       actual = 0;
@@ -328,20 +331,20 @@
       syncChips();
       return;
     }
-    if (force || !startInput.value) startInput.value = current.start;
-    if (force || !endInput.value) endInput.value = current.end;
+    if (force) startInput.value = current.start;
+    if (force) endInput.value = current.end;
     updateSummary();
     syncChips();
   }
 
   shiftSelect.addEventListener("change", async () => {
-    applyShiftDefaults(false);
+    applyShiftDefaults(true);
     await saveForm({ immediate: true });
   });
   document.querySelectorAll("[data-shift-choice]").forEach((button) => {
     button.addEventListener("click", async () => {
       shiftSelect.value = button.dataset.shiftChoice;
-      applyShiftDefaults(false);
+      applyShiftDefaults(true);
       await saveForm({ immediate: true });
     });
   });

@@ -32,7 +32,7 @@ MONTH_NAMES = [
 WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 
 SHIFT_CONFIG = {
-    "Fruehschicht": {"label": "Frühschicht", "target": 460, "break": 20, "start": "07:00", "end": "15:00"},
+    "Fruehschicht": {"label": "Frühschicht", "target": 450, "break": 30, "start": "07:00", "end": "15:00"},
     "Spaetschicht": {"label": "Spätschicht", "target": 420, "break": 0, "start": "12:00", "end": "19:00"},
     "Freitag": {"label": "Freitag", "target": 360, "break": 0, "start": "07:00", "end": "13:00"},
     "Notdienst": {"label": "Notdienst", "target": 0, "break": 0, "start": "", "end": ""},
@@ -451,11 +451,12 @@ def calculate_totals(shift_type: str, start_time: str, end_time: str) -> Totals:
     start_minutes = parse_time(start_time)
     end_minutes = parse_time(end_time)
     if start_minutes is None or end_minutes is None or end_minutes < start_minutes:
-        return Totals(target=config["target"], actual=0, balance=-config["target"], deducted_break=config["break"])
+        return Totals(target=config["target"], actual=0, balance=-config["target"], deducted_break=0)
 
     worked = end_minutes - start_minutes
-    actual = max(worked - config["break"], 0)
-    return Totals(target=config["target"], actual=actual, balance=actual - config["target"], deducted_break=config["break"])
+    deducted_break = config["break"] if worked > 360 else 0
+    actual = max(worked - deducted_break, 0)
+    return Totals(target=config["target"], actual=actual, balance=actual - config["target"], deducted_break=deducted_break)
 
 
 def calculate_ranges(selected_date: date, month_entries: dict[str, dict], selected_form: dict) -> tuple[int, int, int, int]:
