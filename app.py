@@ -4,9 +4,10 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from functools import wraps
 from pathlib import Path
 
-from flask import Flask, jsonify, redirect, render_template, request, send_file, url_for
+from flask import Flask, jsonify, redirect, render_template, request, send_file, session, url_for
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
@@ -15,6 +16,9 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 
 APP_TITLE = "Zeiterfassung"
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "krause")
+APP_SECRET_KEY = os.environ.get("APP_SECRET_KEY", "zeiterfassung-krause-login")
+SESSION_DAYS = 30
 MONTH_NAMES = [
     "Januar",
     "Februar",
@@ -56,8 +60,25 @@ class Totals:
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    app.config["SECRET_KEY"] = APP_SECRET_KEY
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=SESSION_DAYS)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     init_db()
+
+    def is_authenticated() -> bool:
+        return bool(session.get("authenticated"))
+
+    def login_required(view_func):
+        @wraps(view_func)
+        def wrapped_view(*args, **kwargs):
+            if is_authenticated():
+                return view_func(*args, **kwargs)
+            next_url = request.full_path if request.query_string else request.path
+            if next_url.endswith("?"):
+                next_url = next_url[:-1]
+            return redirect(url_for("login", next=next_url))
+
+        return wrapped_view
 
     @app.context_processor
     def inject_globals():
@@ -68,9 +89,35 @@ def create_app() -> Flask:
             "shift_config": SHIFT_CONFIG,
             "format_minutes": format_minutes,
             "balance_class": balance_class,
+            "is_authenticated": is_authenticated(),
         }
 
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if is_authenticated():
+            return redirect(request.args.get("next") or url_for("index"))
+
+        error = ""
+        next_url = request.values.get("next") or url_for("index")
+        if request.method == "POST":
+            password = request.form.get("password", "")
+            remember_me = request.form.get("remember_me") == "on"
+            if password == APP_PASSWORD:
+                session.clear()
+                session["authenticated"] = True
+                session.permanent = remember_me
+                return redirect(next_url)
+            error = "Passwort falsch."
+
+        return render_template("login.html", error=error, next_url=next_url)
+
+    @app.post("/logout")
+    def logout():
+        session.clear()
+        return redirect(url_for("login"))
+
     @app.get("/")
+    @login_required
     def index():
         today = date.today()
         if not request.args:
@@ -160,6 +207,7 @@ def create_app() -> Flask:
         )
 
     @app.post("/save")
+    @login_required
     def save():
         year = int(request.form["year"])
         month = int(request.form["month"])
@@ -182,6 +230,7 @@ def create_app() -> Flask:
         return redirect(url_for("index", year=year, month=month, day=day, view=view_mode))
 
     @app.post("/save-json")
+    @login_required
     def save_json():
         payload = request.get_json(force=True)
         year = int(payload["year"])
@@ -229,6 +278,7 @@ def create_app() -> Flask:
         )
 
     @app.post("/apply-week-template")
+    @login_required
     def apply_week_template():
         year = int(request.form["year"])
         month = int(request.form["month"])
@@ -259,6 +309,7 @@ def create_app() -> Flask:
         return redirect(url_for("index", year=year, month=month, day=day, view="week"))
 
     @app.get("/export/pdf")
+    @login_required
     def export_pdf():
         year = int(request.args.get("year", date.today().year))
         month = int(request.args.get("month", date.today().month))
@@ -267,6 +318,7 @@ def create_app() -> Flask:
         return send_file(pdf_bytes, mimetype="application/pdf", as_attachment=True, download_name=filename)
 
     @app.post("/quick-stamp")
+    @login_required
     def quick_stamp():
         payload = request.get_json(force=True)
         year = int(payload["year"])

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="login-shell">
+  <section class="glass login-card">
+    <div class="login-copy">
+      <p class="eyebrow">Geschuetzter Bereich</p>
+      <h1>{{ app_title }}</h1>
+      <p class="subtitle">Bitte Passwort eingeben, um die Zeiterfassung zu oeffnen.</p>
+    </div>
+
+    <form method="post" action="{{ url_for('login') }}" class="entry-form">
+      <input type="hidden" name="next" value="{{ next_url }}">
+
+      <label>
+        <span>Passwort</span>
+        <input type="password" name="password" autocomplete="current-password" autofocus required>
+      </label>
+
+      <label class="remember-row">
+        <input type="checkbox" name="remember_me">
+        <span>Angemeldet bleiben</span>
+      </label>
+
+      {% if error %}
+        <p class="form-error">{{ error }}</p>
+      {% endif %}
+
+      <button class="button primary" type="submit">Login</button>
+    </form>
+  </section>
+</main>
+{% endblock %}
