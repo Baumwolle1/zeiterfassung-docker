@@ -11,8 +11,14 @@
     <script>
       history.scrollRestoration = "manual";
       const scrollKey = `zeiterfassung-scroll:${location.pathname}`;
+      const skipRestoreKey = `zeiterfassung-scroll-skip:${location.pathname}`;
 
       const restoreScroll = () => {
+        if (sessionStorage.getItem(skipRestoreKey) === "1") {
+          sessionStorage.removeItem(skipRestoreKey);
+          sessionStorage.removeItem(scrollKey);
+          return;
+        }
         const saved = sessionStorage.getItem(scrollKey);
         if (!saved) return;
         requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, Number(saved))));
@@ -30,7 +36,13 @@
       window.addEventListener("beforeunload", rememberScroll);
       document.addEventListener("click", (event) => {
         const trigger = event.target.closest("a, button");
-        if (trigger) rememberScroll();
+        if (!trigger) return;
+        if (trigger.closest("[data-no-scroll-restore]")) {
+          sessionStorage.setItem(skipRestoreKey, "1");
+          sessionStorage.removeItem(scrollKey);
+          return;
+        }
+        rememberScroll();
       });
       document.addEventListener("submit", rememberScroll);
 

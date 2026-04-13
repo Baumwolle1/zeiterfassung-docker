@@ -113,7 +113,7 @@
 
       <div class="days">
         {% for item in visible_days %}
-          <a class="day-card glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %}" data-day-card {% if item.is_selected %}data-selected-day-card{% endif %} href="{{ url_for('index', year=year, month=month, day=item.date.day, view=view_mode) }}">
+          <a class="day-card glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %}" data-day-card data-no-scroll-restore {% if item.is_selected %}data-selected-day-card{% endif %} href="{{ url_for('index', year=year, month=month, day=item.date.day, view=view_mode) }}">
             <div class="day-number">{{ "%02d"|format(item.date.day) }}</div>
             <div class="day-copy">
               <strong>{{ item.weekday }}</strong>
@@ -188,7 +188,6 @@
 <script>
   const form = document.querySelector(".entry-form");
   const currentView = {{ view_mode | tojson }};
-  const selectedDateIso = {{ selected_date.isoformat() | tojson }};
   const shiftSelect = document.getElementById("shift_type");
   const startInput = document.getElementById("start_time");
   const endInput = document.getElementById("end_time");
@@ -218,34 +217,14 @@
   let latestAppliedRequestId = 0;
   let todaySyncInProgress = false;
 
-  function navigateToToday({ forceReload = false } = {}) {
+  function navigateToToday() {
     if (todaySyncInProgress) return;
     todaySyncInProgress = true;
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1);
-    const day = String(now.getDate());
     const target = new URL(window.location.href);
-    target.searchParams.set("year", year);
-    target.searchParams.set("month", month);
-    target.searchParams.set("day", day);
+    target.search = "";
     target.searchParams.set("view", currentView);
-    if (forceReload) {
-      target.searchParams.set("_ts", String(now.getTime()));
-    }
+    target.searchParams.set("_ts", String(Date.now()));
     window.location.replace(target.toString());
-  }
-
-  function syncTodaySelection({ forceReload = false } = {}) {
-    const now = new Date();
-    const todayIso = [
-      now.getFullYear(),
-      String(now.getMonth() + 1).padStart(2, "0"),
-      String(now.getDate()).padStart(2, "0"),
-    ].join("-");
-    if (selectedDateIso !== todayIso || forceReload) {
-      navigateToToday({ forceReload });
-    }
   }
 
   function markInternalNavigation() {
@@ -266,7 +245,7 @@
     }
 
     sessionStorage.removeItem(hiddenAtKey);
-    syncTodaySelection({ forceReload });
+    navigateToToday();
   }
 
   function formatMinutes(totalMinutes) {
