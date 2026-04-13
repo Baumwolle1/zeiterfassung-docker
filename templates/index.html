@@ -210,6 +210,9 @@
   const notesInput = form.querySelector('textarea[name="notes"]');
   const zeroHourTypes = ["Urlaub", "Krank", "Feiertag", "Frei"];
   const vacationTotal = {{ vacation_total | tojson }};
+  const hiddenAtKey = "zeiterfassung-hidden-at";
+  const skipResumeKey = "zeiterfassung-skip-resume-sync";
+  const resumeThresholdMs = 1500;
   let autosaveTimer = null;
   let saveRequestId = 0;
   let latestAppliedRequestId = 0;
@@ -243,6 +246,27 @@
     if (selectedDateIso !== todayIso || forceReload) {
       navigateToToday({ forceReload });
     }
+  }
+
+  function markInternalNavigation() {
+    sessionStorage.setItem(skipResumeKey, "1");
+    sessionStorage.removeItem(hiddenAtKey);
+  }
+
+  function maybeResumeToToday({ forceReload = false } = {}) {
+    const shouldSkip = sessionStorage.getItem(skipResumeKey) === "1";
+    if (shouldSkip) {
+      sessionStorage.removeItem(skipResumeKey);
+      return;
+    }
+
+    const hiddenAt = Number(sessionStorage.getItem(hiddenAtKey) || "0");
+    if (!forceReload && (!hiddenAt || Date.now() - hiddenAt < resumeThresholdMs)) {
+      return;
+    }
+
+    sessionStorage.removeItem(hiddenAtKey);
+    syncTodaySelection({ forceReload });
   }
 
   function formatMinutes(totalMinutes) {
@@ -437,16 +461,32 @@
     saveForm({ immediate: true });
   });
 
-  window.addEventListener("pageshow", (event) => {
-    syncTodaySelection({ forceReload: event.persisted });
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest("a[href]");
+    if (link) {
+      markInternalNavigation();
+    }
   });
-  window.addEventListener("focus", () => {
-    syncTodaySelection();
+  document.addEventListener("submit", (event) => {
+    if (event.target.closest(".entry-form")) return;
+    markInternalNavigation();
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      syncTodaySelection();
+    if (document.visibilityState === "hidden") {
+      if (sessionStorage.getItem(skipResumeKey) !== "1") {
+        sessionStorage.setItem(hiddenAtKey, String(Date.now()));
+      }
+      return;
     }
+    maybeResumeToToday();
+  });
+  window.addEventListener("pagehide", () => {
+    if (sessionStorage.getItem(skipResumeKey) !== "1") {
+      sessionStorage.setItem(hiddenAtKey, String(Date.now()));
+    }
+  });
+  window.addEventListener("pageshow", (event) => {
+    maybeResumeToToday({ forceReload: event.persisted });
   });
 
   applyShiftDefaults(false);
