@@ -187,6 +187,8 @@
 
 <script>
   const form = document.querySelector(".entry-form");
+  const currentView = {{ view_mode | tojson }};
+  const selectedDateIso = {{ selected_date.isoformat() | tojson }};
   const shiftSelect = document.getElementById("shift_type");
   const startInput = document.getElementById("start_time");
   const endInput = document.getElementById("end_time");
@@ -211,6 +213,37 @@
   let autosaveTimer = null;
   let saveRequestId = 0;
   let latestAppliedRequestId = 0;
+  let todaySyncInProgress = false;
+
+  function navigateToToday({ forceReload = false } = {}) {
+    if (todaySyncInProgress) return;
+    todaySyncInProgress = true;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1);
+    const day = String(now.getDate());
+    const target = new URL(window.location.href);
+    target.searchParams.set("year", year);
+    target.searchParams.set("month", month);
+    target.searchParams.set("day", day);
+    target.searchParams.set("view", currentView);
+    if (forceReload) {
+      target.searchParams.set("_ts", String(now.getTime()));
+    }
+    window.location.replace(target.toString());
+  }
+
+  function syncTodaySelection({ forceReload = false } = {}) {
+    const now = new Date();
+    const todayIso = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+    if (selectedDateIso !== todayIso || forceReload) {
+      navigateToToday({ forceReload });
+    }
+  }
 
   function formatMinutes(totalMinutes) {
     const sign = totalMinutes < 0 ? "-" : "";
@@ -402,6 +435,18 @@
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     saveForm({ immediate: true });
+  });
+
+  window.addEventListener("pageshow", (event) => {
+    syncTodaySelection({ forceReload: event.persisted });
+  });
+  window.addEventListener("focus", () => {
+    syncTodaySelection();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      syncTodaySelection();
+    }
   });
 
   applyShiftDefaults(false);
