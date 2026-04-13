@@ -205,6 +205,7 @@
   const summaryVacationUsed = document.getElementById("summary-vacation-used");
   const summaryVacationLeft = document.getElementById("summary-vacation-left");
   const summarySickDays = document.getElementById("summary-sick-days");
+  const todayLink = document.querySelector('.hero-actions a.button.soft');
   const selectedDayCard = document.querySelector("[data-selected-day-card]");
   const notesInput = form.querySelector('textarea[name="notes"]');
   const zeroHourTypes = ["Urlaub", "Krank", "Feiertag", "Frei"];
@@ -217,11 +218,43 @@
   let latestAppliedRequestId = 0;
   let todaySyncInProgress = false;
 
+  function getClientTodayParts() {
+    const now = new Date();
+    return {
+      year: String(now.getFullYear()),
+      month: String(now.getMonth() + 1),
+      day: String(now.getDate()),
+      iso: [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, "0"),
+        String(now.getDate()).padStart(2, "0"),
+      ].join("-"),
+    };
+  }
+
+  function syncClientTodayCookie() {
+    const today = getClientTodayParts();
+    document.cookie = `client_today=${today.iso}; path=/; max-age=172800; SameSite=Lax`;
+    if (todayLink) {
+      const target = new URL(todayLink.href, window.location.origin);
+      target.searchParams.set("year", today.year);
+      target.searchParams.set("month", today.month);
+      target.searchParams.set("day", today.day);
+      target.searchParams.set("view", "week");
+      todayLink.href = target.toString();
+    }
+    return today;
+  }
+
   function navigateToToday() {
     if (todaySyncInProgress) return;
     todaySyncInProgress = true;
+    const today = syncClientTodayCookie();
     const target = new URL(window.location.href);
     target.search = "";
+    target.searchParams.set("year", today.year);
+    target.searchParams.set("month", today.month);
+    target.searchParams.set("day", today.day);
     target.searchParams.set("view", currentView);
     target.searchParams.set("_ts", String(Date.now()));
     window.location.replace(target.toString());
@@ -452,22 +485,27 @@
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
+      syncClientTodayCookie();
       if (sessionStorage.getItem(skipResumeKey) !== "1") {
         sessionStorage.setItem(hiddenAtKey, String(Date.now()));
       }
       return;
     }
+    syncClientTodayCookie();
     maybeResumeToToday();
   });
   window.addEventListener("pagehide", () => {
+    syncClientTodayCookie();
     if (sessionStorage.getItem(skipResumeKey) !== "1") {
       sessionStorage.setItem(hiddenAtKey, String(Date.now()));
     }
   });
   window.addEventListener("pageshow", (event) => {
+    syncClientTodayCookie();
     maybeResumeToToday({ forceReload: event.persisted });
   });
 
+  syncClientTodayCookie();
   applyShiftDefaults(false);
 </script>
 {% endblock %}

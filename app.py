@@ -122,7 +122,7 @@ def create_app() -> Flask:
     @app.get("/")
     @login_required
     def index():
-        today = date.today()
+        today = client_today_from_request() or date.today()
         if not request.args:
             return redirect(url_for("index", year=today.year, month=today.month, day=today.day, view="week"))
 
@@ -384,6 +384,17 @@ def create_app() -> Flask:
         )
 
     return app
+
+
+def client_today_from_request() -> date | None:
+    value = request.cookies.get("client_today", "").strip()
+    if not value:
+        return None
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    return parsed
 
 
 def init_db() -> None:
