@@ -227,7 +227,7 @@ def create_app() -> Flask:
         shift_type = request.form["shift_type"]
         start_time = normalize_time(request.form.get("start_time", ""))
         end_time = normalize_time(request.form.get("end_time", ""))
-        notes = request.form.get("notes", "").strip()
+        notes = request.form.get("notes", "")
 
         if shift_type not in SHIFT_CONFIG:
             shift_type = default_type_for(selected_date)
@@ -251,7 +251,7 @@ def create_app() -> Flask:
         shift_type = payload.get("shift_type", default_type_for(selected_date))
         start_time = normalize_time(payload.get("start_time", ""))
         end_time = normalize_time(payload.get("end_time", ""))
-        notes = (payload.get("notes", "") or "").strip()
+        notes = payload.get("notes", "") or ""
 
         if shift_type not in SHIFT_CONFIG:
             shift_type = default_type_for(selected_date)
