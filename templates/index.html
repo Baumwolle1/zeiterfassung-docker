@@ -113,7 +113,7 @@
 
       <div class="days">
         {% for item in visible_days %}
-          <a class="day-card glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %}" data-day-card data-no-scroll-restore {% if item.is_selected %}data-selected-day-card{% endif %} href="{{ url_for('index', year=year, month=month, day=item.date.day, view=view_mode) }}">
+          <a class="day-card glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %}" data-day-card {% if view_mode == "week" %}data-no-scroll-restore{% endif %} {% if item.is_selected %}data-selected-day-card{% endif %} href="{{ url_for('index', year=year, month=month, day=item.date.day, view=view_mode) }}">
             <div class="day-number">{{ "%02d"|format(item.date.day) }}</div>
             <div class="day-copy">
               <strong>{{ item.weekday }}</strong>
