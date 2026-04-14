@@ -44,6 +44,7 @@ SHIFT_CONFIG = {
     "Notdienst": {"label": "Notdienst", "target": 0, "break": 0, "start": "", "end": ""},
     "Urlaub": {"label": "Urlaub", "target": 0, "break": 0, "start": "", "end": ""},
     "Krank": {"label": "Krank", "target": 0, "break": 0, "start": "", "end": ""},
+    "Arztkrank": {"label": "Arztkrank", "target": 0, "break": 0, "start": "", "end": ""},
     "Feiertag": {"label": "Feiertag", "target": 0, "break": 0, "start": "", "end": ""},
     "Frei": {"label": "Frei", "target": 0, "break": 0, "start": "", "end": ""},
 }
@@ -673,7 +674,7 @@ def build_month_pdf(year: int, month: int):
                 (entry["notes"] if entry else "") or "-",
             ]
         )
-        if shift_type in {"Urlaub", "Krank", "Feiertag"}:
+        if shift_type in {"Urlaub", "Krank", "Arztkrank", "Feiertag"}:
             highlighted_rows.append((len(data) - 1, shift_type))
 
     data.append(["Monat gesamt", "", "", format_minutes(month_target), format_minutes(month_actual), format_minutes(month_actual - month_target), ""])
@@ -710,6 +711,7 @@ def build_month_pdf(year: int, month: int):
     highlight_colors = {
         "Urlaub": colors.HexColor("#E3F5D8"),
         "Krank": colors.HexColor("#FFF2B8"),
+        "Arztkrank": colors.HexColor("#FFD8AE"),
         "Feiertag": colors.HexColor("#FFD9D6"),
     }
     for row_index, shift_type in highlighted_rows:
@@ -719,17 +721,19 @@ def build_month_pdf(year: int, month: int):
     story.append(table)
     story.append(Spacer(1, 12))
 
-    legend_data = [["", "Urlaub", "", "Krank", "", "Feiertag"]]
-    legend = Table(legend_data, colWidths=[8 * mm, 22 * mm, 8 * mm, 20 * mm, 8 * mm, 28 * mm])
+    legend_data = [["", "Urlaub", "", "Krank", "", "Arztkrank", "", "Feiertag"]]
+    legend = Table(legend_data, colWidths=[8 * mm, 20 * mm, 8 * mm, 18 * mm, 8 * mm, 24 * mm, 8 * mm, 24 * mm])
     legend.setStyle(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (0, 0), highlight_colors["Urlaub"]),
                 ("BACKGROUND", (2, 0), (2, 0), highlight_colors["Krank"]),
-                ("BACKGROUND", (4, 0), (4, 0), highlight_colors["Feiertag"]),
+                ("BACKGROUND", (4, 0), (4, 0), highlight_colors["Arztkrank"]),
+                ("BACKGROUND", (6, 0), (6, 0), highlight_colors["Feiertag"]),
                 ("BOX", (0, 0), (0, 0), 0.35, colors.HexColor("#98B58B")),
                 ("BOX", (2, 0), (2, 0), 0.35, colors.HexColor("#C8B15B")),
-                ("BOX", (4, 0), (4, 0), 0.35, colors.HexColor("#C38C86")),
+                ("BOX", (4, 0), (4, 0), 0.35, colors.HexColor("#CC9A53")),
+                ("BOX", (6, 0), (6, 0), 0.35, colors.HexColor("#C38C86")),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("FONTNAME", (1, 0), (-1, -1), "Helvetica"),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),

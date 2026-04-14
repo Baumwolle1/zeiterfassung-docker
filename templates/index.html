@@ -29,7 +29,7 @@
         </label>
 
         <div class="quick-types">
-          {% for key in ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst", "Urlaub", "Krank", "Feiertag", "Frei"] %}
+          {% for key in ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst", "Urlaub", "Krank", "Arztkrank", "Feiertag", "Frei"] %}
             <button class="chip {% if form_data.shift_type == key %}active{% endif %}" type="button" data-shift-choice="{{ key }}">{{ shift_config[key].label }}</button>
           {% endfor %}
         </div>
@@ -208,7 +208,7 @@
   const todayLink = document.querySelector('.hero-actions a.button.soft');
   const selectedDayCard = document.querySelector("[data-selected-day-card]");
   const notesInput = form.querySelector('textarea[name="notes"]');
-  const zeroHourTypes = ["Urlaub", "Krank", "Feiertag", "Frei"];
+  const zeroHourTypes = ["Urlaub", "Krank", "Arztkrank", "Feiertag", "Frei"];
   const vacationTotal = {{ vacation_total | tojson }};
   const hiddenAtKey = "zeiterfassung-hidden-at";
   const skipResumeKey = "zeiterfassung-skip-resume-sync";
