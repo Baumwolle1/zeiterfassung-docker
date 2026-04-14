@@ -306,17 +306,26 @@ def create_app() -> Flask:
             current = week_start + timedelta(days=offset)
             if current.month != month or current.year != year:
                 continue
+            existing_entry = fetch_entry(current)
             if holiday_name_for(current):
-                save_entry(current, "Feiertag", "", "", "")
+                notes = existing_entry["notes"] if existing_entry else ""
+                save_entry(current, "Feiertag", "", "", notes)
                 continue
             if current.weekday() == 4:
-                save_entry(current, "Freitag", SHIFT_CONFIG["Freitag"]["start"], SHIFT_CONFIG["Freitag"]["end"], "")
+                notes = existing_entry["notes"] if existing_entry else ""
+                start_time = (existing_entry["start_time"] if existing_entry else "") or SHIFT_CONFIG["Freitag"]["start"]
+                end_time = (existing_entry["end_time"] if existing_entry else "") or SHIFT_CONFIG["Freitag"]["end"]
+                save_entry(current, "Freitag", start_time, end_time, notes)
                 continue
             if current.weekday() >= 5:
-                save_entry(current, "Frei", "", "", "")
+                notes = existing_entry["notes"] if existing_entry else ""
+                save_entry(current, "Frei", "", "", notes)
                 continue
             defaults = SHIFT_CONFIG[template_type]
-            save_entry(current, template_type, defaults["start"], defaults["end"], "")
+            notes = existing_entry["notes"] if existing_entry else ""
+            start_time = (existing_entry["start_time"] if existing_entry else "") or defaults["start"]
+            end_time = (existing_entry["end_time"] if existing_entry else "") or defaults["end"]
+            save_entry(current, template_type, start_time, end_time, notes)
 
         return redirect(url_for("index", year=year, month=month, day=day, view="week"))
 
