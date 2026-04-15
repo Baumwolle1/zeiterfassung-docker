@@ -180,6 +180,7 @@ def create_app() -> Flask:
         )
         selected_totals = calculate_totals(form_data["shift_type"], form_data["start_time"], form_data["end_time"])
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, form_data)
+        month_progress = calculate_month_progress(year, month, month_entries, selected_date, form_data, today)
         vacation_taken, sick_days = count_special_days(year)
         visible_days = [
             item for item in days
@@ -203,7 +204,7 @@ def create_app() -> Flask:
             week_balance=format_minutes(week_actual - week_target),
             month_target=format_minutes(month_target),
             month_actual=format_minutes(month_actual),
-            month_balance=format_minutes(month_actual - month_target),
+            month_progress=format_minutes(month_progress),
             vacation_total=YEAR_VACATION_DAYS,
             vacation_taken=vacation_taken,
             vacation_remaining=max(YEAR_VACATION_DAYS - vacation_taken, 0),
@@ -265,6 +266,8 @@ def create_app() -> Flask:
         totals = calculate_totals(shift_type, start_time, end_time)
         month_entries = fetch_month_entries(year, month)
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, entry)
+        today = client_today_from_request() or date.today()
+        month_progress = calculate_month_progress(year, month, month_entries, selected_date, entry, today)
         vacation_taken, sick_days = count_special_days(year)
         return jsonify(
             {
@@ -279,7 +282,7 @@ def create_app() -> Flask:
                 "break": format_minutes(totals.deducted_break),
                 "balance_class": balance_class(totals.balance),
                 "week_balance": format_minutes(week_actual - week_target),
-                "month_balance": format_minutes(month_actual - month_target),
+                "month_progress": format_minutes(month_progress),
                 "vacation_taken": vacation_taken,
                 "vacation_remaining": max(YEAR_VACATION_DAYS - vacation_taken, 0),
                 "sick_days": sick_days,
@@ -583,6 +586,33 @@ def calculate_ranges(selected_date: date, month_entries: dict[str, dict], select
         month_target += totals.target
         month_actual += totals.actual
     return week_target, week_actual, month_target, month_actual
+
+
+def calculate_month_progress(
+    year: int,
+    month: int,
+    month_entries: dict[str, dict],
+    selected_date: date,
+    selected_form: dict,
+    today: date,
+) -> int:
+    month_start = date(year, month, 1)
+    _, days_in_month = calendar.monthrange(year, month)
+    month_end = date(year, month, days_in_month)
+
+    if (year, month) > (today.year, today.month):
+        return 0
+
+    cutoff = today if (year, month) == (today.year, today.month) else month_end
+    cutoff = min(cutoff, month_end)
+
+    progress = 0
+    current = month_start
+    while current <= cutoff:
+        totals = totals_for_day(current, month_entries, selected_date, selected_form)
+        progress += min(totals.actual, totals.target)
+        current += timedelta(days=1)
+    return progress
 
 
 def totals_for_day(day_value: date, month_entries: dict[str, dict], selected_date: date, selected_form: dict) -> Totals:

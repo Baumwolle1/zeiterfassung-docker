@@ -65,8 +65,8 @@
             <strong id="summary-week">{{ week_balance }}</strong>
           </div>
           <div>
-            <span>Monat</span>
-            <strong id="summary-month">{{ month_balance }}</strong>
+            <span>Monat Ist</span>
+            <strong id="summary-month">{{ month_progress }}</strong>
           </div>
         </div>
 
@@ -163,8 +163,8 @@
       <strong id="summary-week-bottom">{{ week_balance }}</strong>
     </article>
     <article class="summary-card glass">
-      <span>Monat</span>
-      <strong id="summary-month-bottom">{{ month_balance }}</strong>
+      <span>Monat Ist</span>
+      <strong id="summary-month-bottom">{{ month_progress }}</strong>
     </article>
     <article class="summary-card glass">
       <span>Urlaub genommen</span>
@@ -346,9 +346,9 @@
     summaryBalance.className = data.balance_class;
     summaryBreak.textContent = data.break;
     summaryWeek.textContent = data.week_balance;
-    summaryMonth.textContent = data.month_balance;
+    summaryMonth.textContent = data.month_progress;
     summaryWeekBottom.textContent = data.week_balance;
-    summaryMonthBottom.textContent = data.month_balance;
+    summaryMonthBottom.textContent = data.month_progress;
     summaryVacationUsed.textContent = `${data.vacation_taken} / ${vacationTotal}`;
     summaryVacationLeft.textContent = data.vacation_remaining;
     summarySickDays.textContent = data.sick_days;
