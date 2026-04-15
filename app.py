@@ -858,14 +858,14 @@ def shift_month(base: date, delta: int) -> date:
 def build_month_pdf(year: int, month: int):
     month_entries = fetch_month_entries(year, month)
     _, days_in_month = calendar.monthrange(year, month)
-    data = [["Datum", "Beginn", "Ende", "Soll", "Ist", "Saldo", "Notiz"]]
-    month_target = 0
+    data = [["Datum", "Beginn", "Ende", "Ist", "Saldo", "Notiz"]]
     month_actual = 0
+    month_balance = 0
     highlighted_rows: list[tuple[int, str]] = []
     weekly_summary_rows: list[int] = []
     current_week_key: tuple[int, int] | None = None
-    current_week_target = 0
     current_week_actual = 0
+    current_week_balance = 0
 
     for day_number in range(1, days_in_month + 1):
         current = date(year, month, day_number)
@@ -876,15 +876,14 @@ def build_month_pdf(year: int, month: int):
                     f"KW {current_week_key[1]:02d} gesamt",
                     "",
                     "",
-                    format_minutes(current_week_target),
                     format_minutes(current_week_actual),
-                    format_minutes(current_week_actual - current_week_target),
+                    format_minutes(current_week_balance),
                     "",
                 ]
             )
             weekly_summary_rows.append(len(data) - 1)
-            current_week_target = 0
             current_week_actual = 0
+            current_week_balance = 0
 
         entry = month_entries.get(current.isoformat())
         shift_type = entry["shift_type"] if entry else default_type_for(current)
@@ -895,22 +894,32 @@ def build_month_pdf(year: int, month: int):
             (entry["end_time"] if entry else "") or "",
             segments,
         )
-        month_target += totals.target
         month_actual += totals.actual
-        current_week_target += totals.target
+        month_balance += totals.balance
         current_week_actual += totals.actual
+        current_week_balance += totals.balance
         current_week_key = week_key
         day_segments = segments if shift_type == "Notdienst" and segments else [{"start": (entry["start_time"] if entry else "") or "-", "end": (entry["end_time"] if entry else "") or "-"}]
         notes_value = (entry["notes"] if entry else "") or "-"
         for segment_index, segment in enumerate(day_segments):
+            segment_actual = totals.actual
+            segment_balance = totals.balance
+            if shift_type == "Notdienst":
+                start_minutes = parse_time(segment.get("start") or "")
+                end_minutes = parse_time(segment.get("end") or "")
+                if start_minutes is None or end_minutes is None or end_minutes < start_minutes:
+                    segment_actual = 0
+                    segment_balance = 0
+                else:
+                    segment_actual = end_minutes - start_minutes
+                    segment_balance = segment_actual
             data.append(
                 [
                     f"{WEEKDAY_SHORT[current.weekday()]} {current.strftime('%d.%m.%Y')}" if segment_index == 0 else "",
                     segment.get("start") or "-",
                     segment.get("end") or "-",
-                    format_minutes(totals.target) if segment_index == 0 else "",
-                    format_minutes(totals.actual) if segment_index == 0 else "",
-                    format_minutes(totals.balance) if segment_index == 0 else "",
+                    format_minutes(segment_actual) if shift_type == "Notdienst" or segment_index == 0 else "",
+                    format_minutes(segment_balance) if shift_type == "Notdienst" or segment_index == 0 else "",
                     notes_value if segment_index == 0 else "",
                 ]
             )
@@ -923,15 +932,14 @@ def build_month_pdf(year: int, month: int):
                 f"KW {current_week_key[1]:02d} gesamt",
                 "",
                 "",
-                format_minutes(current_week_target),
                 format_minutes(current_week_actual),
-                format_minutes(current_week_actual - current_week_target),
+                format_minutes(current_week_balance),
                 "",
             ]
         )
         weekly_summary_rows.append(len(data) - 1)
 
-    data.append(["Monat gesamt", "", "", format_minutes(month_target), format_minutes(month_actual), format_minutes(month_actual - month_target), ""])
+    data.append(["Monat gesamt", "", "", format_minutes(month_actual), format_minutes(month_balance), ""])
 
     buffer = io.BytesIO()
     document = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=12 * mm, leftMargin=12 * mm, topMargin=12 * mm, bottomMargin=12 * mm)
@@ -939,10 +947,10 @@ def build_month_pdf(year: int, month: int):
     story = [
         Paragraph(f"Zeiterfassung {MONTH_NAMES[month - 1]} {year}", styles["Title"]),
         Spacer(1, 6),
-        Paragraph("Monatsuebersicht mit klarer Soll-Ist-Auswertung.", styles["BodyText"]),
+        Paragraph("Monatsuebersicht mit Wochen- und Monatsstunden.", styles["BodyText"]),
         Spacer(1, 14),
     ]
-    table = Table(data, repeatRows=1, colWidths=[34 * mm, 20 * mm, 20 * mm, 19 * mm, 19 * mm, 19 * mm, 126 * mm])
+    table = Table(data, repeatRows=1, colWidths=[34 * mm, 22 * mm, 22 * mm, 21 * mm, 21 * mm, 138 * mm])
     table_style_commands = [
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#CFE0FF")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#16325C")),

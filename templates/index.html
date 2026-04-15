@@ -155,14 +155,6 @@
       <strong id="summary-month-bottom">{{ month_progress }}</strong>
     </article>
     <article class="summary-card glass">
-      <span>Monat Soll</span>
-      <strong id="summary-month-target-bottom">{{ month_target }}</strong>
-    </article>
-    <article class="summary-card glass">
-      <span>Gleitzeit Monat</span>
-      <strong id="summary-month-balance-bottom" class="{{ month_balance_class }}">{{ month_balance }}</strong>
-    </article>
-    <article class="summary-card glass">
       <span>Urlaub genommen</span>
       <strong id="summary-vacation-used">{{ vacation_taken }} / {{ vacation_total }}</strong>
     </article>
@@ -223,8 +215,6 @@
   const summaryMonth = document.getElementById("summary-month");
   const summaryWeekBottom = document.getElementById("summary-week-bottom");
   const summaryMonthBottom = document.getElementById("summary-month-bottom");
-  const summaryMonthTargetBottom = document.getElementById("summary-month-target-bottom");
-  const summaryMonthBalanceBottom = document.getElementById("summary-month-balance-bottom");
   const summaryVacationUsed = document.getElementById("summary-vacation-used");
   const summaryVacationLeft = document.getElementById("summary-vacation-left");
   const summarySickDays = document.getElementById("summary-sick-days");
@@ -242,6 +232,7 @@
   let saveRequestId = 0;
   let latestAppliedRequestId = 0;
   let todaySyncInProgress = false;
+  let hasUnsavedChanges = false;
   let segmentState = Array.isArray(initialSegments) && initialSegments.length ? initialSegments : [{ start: {{ form_data.start_time | tojson }}, end: {{ form_data.end_time | tojson }} }];
 
   function getClientTodayParts() {
@@ -324,6 +315,12 @@
 
   function getCurrentSegments() {
     return segmentState.map((segment) => normalizeSegment(segment));
+  }
+
+  function formatTimeInput(value) {
+    const digits = String(value || "").replace(/\D/g, "").slice(0, 4);
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}:${digits.slice(2)}`;
   }
 
   function ensureMinimumSegments() {
@@ -482,9 +479,6 @@
     summaryMonth.textContent = data.month_progress;
     summaryWeekBottom.textContent = data.week_balance;
     summaryMonthBottom.textContent = data.month_progress;
-    summaryMonthTargetBottom.textContent = data.month_target;
-    summaryMonthBalanceBottom.textContent = data.month_balance;
-    summaryMonthBalanceBottom.className = data.month_balance_class;
     summaryVacationUsed.textContent = `${data.vacation_taken} / ${vacationTotal}`;
     summaryVacationLeft.textContent = data.vacation_remaining;
     summarySickDays.textContent = data.sick_days;
@@ -528,6 +522,7 @@
       const data = await response.json();
       if (!data.ok || requestId < latestAppliedRequestId) return;
       latestAppliedRequestId = requestId;
+      hasUnsavedChanges = false;
       applySavedState(data);
     };
 
@@ -604,6 +599,7 @@
     const addButton = event.target.closest("[data-add-segment]");
     if (addButton) {
       segmentState.push({ start: "", end: "" });
+      hasUnsavedChanges = true;
       renderSegments();
       updateSummary();
       return;
@@ -618,6 +614,7 @@
     const removeButton = event.target.closest("[data-remove-segment]");
     if (removeButton) {
       segmentState.splice(Number(removeButton.dataset.removeSegment), 1);
+      hasUnsavedChanges = true;
       renderSegments();
       updateSummary();
       saveForm({ immediate: true });
@@ -631,12 +628,14 @@
     const input = startField || endField;
     const index = Number(input.dataset.index);
     const field = startField ? "start" : "end";
+    const formattedValue = formatTimeInput(input.value);
+    input.value = formattedValue;
     if (!segmentState[index]) {
       segmentState[index] = { start: "", end: "" };
     }
-    segmentState[index][field] = input.value;
+    segmentState[index][field] = formattedValue;
+    hasUnsavedChanges = true;
     updateSummary();
-    saveForm();
   });
 
   timeSegments.addEventListener("blur", (event) => {
@@ -644,7 +643,9 @@
     if (!input) return;
     const index = Number(input.dataset.index);
     const field = input.hasAttribute("data-segment-start") ? "start" : "end";
-    segmentState[index][field] = input.value;
+    const formattedValue = formatTimeInput(input.value);
+    input.value = formattedValue;
+    segmentState[index][field] = formattedValue;
     saveForm({ immediate: true });
   }, true);
 
@@ -667,6 +668,9 @@
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
+      if (hasUnsavedChanges) {
+        saveForm({ immediate: true });
+      }
       syncClientTodayCookie();
       if (sessionStorage.getItem(skipResumeKey) !== "1") {
         sessionStorage.setItem(hiddenAtKey, String(Date.now()));
@@ -677,6 +681,9 @@
     maybeResumeToToday();
   });
   window.addEventListener("pagehide", () => {
+    if (hasUnsavedChanges) {
+      saveForm({ immediate: true });
+    }
     syncClientTodayCookie();
     if (sessionStorage.getItem(skipResumeKey) !== "1") {
       sessionStorage.setItem(hiddenAtKey, String(Date.now()));
