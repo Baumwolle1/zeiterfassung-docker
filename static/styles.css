@@ -133,6 +133,46 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   font-size: clamp(1.2rem, 2vw, 1.5rem);
   overflow-wrap: anywhere;
 }
+.weekly-overview {
+  padding: 20px;
+  margin-bottom: 14px;
+  border-radius: 28px;
+}
+.weekly-overview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.weekly-overview-totals {
+  color: var(--muted);
+  font-weight: 700;
+}
+.weekly-list {
+  display: grid;
+  gap: 10px;
+}
+.weekly-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+}
+.weekly-card span {
+  display: block;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.weekly-card strong {
+  display: block;
+}
+.weekly-metrics {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
 
 .layout {
   display: grid;
@@ -507,6 +547,14 @@ input:focus, select:focus, textarea:focus {
     align-items: stretch;
   }
   .week-range { text-align: left; }
+  .weekly-overview-head,
+  .weekly-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .weekly-metrics {
+    text-align: left;
+  }
   .quick-types { display: grid; grid-template-columns: 1fr 1fr; }
   .week-apply-button,
   .toggle-pill {

@@ -237,6 +237,7 @@ def create_app() -> Flask:
         )
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, form_data)
         month_progress = calculate_month_progress(year, month, month_entries, selected_date, form_data, today)
+        week_summaries = build_week_summaries(year, month, month_entries, selected_date, form_data)
         vacation_taken, sick_days = count_special_days(year)
         visible_days = [
             item for item in days
@@ -261,6 +262,9 @@ def create_app() -> Flask:
             month_target=format_minutes(month_target),
             month_actual=format_minutes(month_actual),
             month_progress=format_minutes(month_progress),
+            month_balance=format_minutes(month_actual - month_target),
+            month_balance_class=balance_class(month_actual - month_target),
+            week_summaries=serialize_week_summaries(week_summaries),
             vacation_total=YEAR_VACATION_DAYS,
             vacation_taken=vacation_taken,
             vacation_remaining=max(YEAR_VACATION_DAYS - vacation_taken, 0),
@@ -342,6 +346,7 @@ def create_app() -> Flask:
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, entry)
         today = client_today_from_request() or date.today()
         month_progress = calculate_month_progress(year, month, month_entries, selected_date, entry, today)
+        week_summaries = build_week_summaries(year, month, month_entries, selected_date, entry)
         vacation_taken, sick_days = count_special_days(year)
         return jsonify(
             {
@@ -358,6 +363,11 @@ def create_app() -> Flask:
                 "balance_class": balance_class(totals.balance),
                 "week_balance": format_minutes(week_actual - week_target),
                 "month_progress": format_minutes(month_progress),
+                "month_target": format_minutes(month_target),
+                "month_actual": format_minutes(month_actual),
+                "month_balance": format_minutes(month_actual - month_target),
+                "month_balance_class": balance_class(month_actual - month_target),
+                "week_summaries": serialize_week_summaries(week_summaries),
                 "vacation_taken": vacation_taken,
                 "vacation_remaining": max(YEAR_VACATION_DAYS - vacation_taken, 0),
                 "sick_days": sick_days,
@@ -724,9 +734,57 @@ def calculate_month_progress(
     current = month_start
     while current <= cutoff:
         totals = totals_for_day(current, month_entries, selected_date, selected_form)
-        progress += min(totals.actual, totals.target)
+        progress += totals.actual
         current += timedelta(days=1)
     return progress
+
+
+def build_week_summaries(year: int, month: int, month_entries: dict[str, dict], selected_date: date, selected_form: dict) -> list[dict]:
+    _, days_in_month = calendar.monthrange(year, month)
+    summaries: list[dict] = []
+    current_summary: dict | None = None
+
+    for day_number in range(1, days_in_month + 1):
+        current = date(year, month, day_number)
+        iso_year, iso_week, _ = current.isocalendar()
+        if not current_summary or current_summary["iso_year"] != iso_year or current_summary["iso_week"] != iso_week:
+            if current_summary:
+                summaries.append(current_summary)
+            current_summary = {
+                "iso_year": iso_year,
+                "iso_week": iso_week,
+                "start": current,
+                "end": current,
+                "target": 0,
+                "actual": 0,
+            }
+
+        totals = totals_for_day(current, month_entries, selected_date, selected_form)
+        current_summary["end"] = current
+        current_summary["target"] += totals.target
+        current_summary["actual"] += totals.actual
+
+    if current_summary:
+        summaries.append(current_summary)
+
+    for summary in summaries:
+        summary["balance"] = summary["actual"] - summary["target"]
+
+    return summaries
+
+
+def serialize_week_summaries(week_summaries: list[dict]) -> list[dict]:
+    return [
+        {
+            "label": f"KW {summary['iso_week']:02d}",
+            "range": f"{summary['start'].strftime('%d.%m.')} - {summary['end'].strftime('%d.%m.')}",
+            "target": format_minutes(summary["target"]),
+            "actual": format_minutes(summary["actual"]),
+            "balance": format_minutes(summary["balance"]),
+            "balance_class": balance_class(summary["balance"]),
+        }
+        for summary in week_summaries
+    ]
 
 
 def totals_for_day(day_value: date, month_entries: dict[str, dict], selected_date: date, selected_form: dict) -> Totals:
@@ -804,9 +862,30 @@ def build_month_pdf(year: int, month: int):
     month_target = 0
     month_actual = 0
     highlighted_rows: list[tuple[int, str]] = []
+    weekly_summary_rows: list[int] = []
+    current_week_key: tuple[int, int] | None = None
+    current_week_target = 0
+    current_week_actual = 0
 
     for day_number in range(1, days_in_month + 1):
         current = date(year, month, day_number)
+        week_key = (current.isocalendar().year, current.isocalendar().week)
+        if current_week_key is not None and week_key != current_week_key:
+            data.append(
+                [
+                    f"KW {current_week_key[1]:02d} gesamt",
+                    "",
+                    "",
+                    format_minutes(current_week_target),
+                    format_minutes(current_week_actual),
+                    format_minutes(current_week_actual - current_week_target),
+                    "",
+                ]
+            )
+            weekly_summary_rows.append(len(data) - 1)
+            current_week_target = 0
+            current_week_actual = 0
+
         entry = month_entries.get(current.isoformat())
         shift_type = entry["shift_type"] if entry else default_type_for(current)
         segments = (entry["segments"] if entry else []) or []
@@ -818,6 +897,9 @@ def build_month_pdf(year: int, month: int):
         )
         month_target += totals.target
         month_actual += totals.actual
+        current_week_target += totals.target
+        current_week_actual += totals.actual
+        current_week_key = week_key
         day_segments = segments if shift_type == "Notdienst" and segments else [{"start": (entry["start_time"] if entry else "") or "-", "end": (entry["end_time"] if entry else "") or "-"}]
         notes_value = (entry["notes"] if entry else "") or "-"
         for segment_index, segment in enumerate(day_segments):
@@ -834,6 +916,20 @@ def build_month_pdf(year: int, month: int):
             )
             if shift_type in {"Urlaub", "Krank", "Arztkrank", "Feiertag", "Notdienst"}:
                 highlighted_rows.append((len(data) - 1, shift_type))
+
+    if current_week_key is not None:
+        data.append(
+            [
+                f"KW {current_week_key[1]:02d} gesamt",
+                "",
+                "",
+                format_minutes(current_week_target),
+                format_minutes(current_week_actual),
+                format_minutes(current_week_actual - current_week_target),
+                "",
+            ]
+        )
+        weekly_summary_rows.append(len(data) - 1)
 
     data.append(["Monat gesamt", "", "", format_minutes(month_target), format_minutes(month_actual), format_minutes(month_actual - month_target), ""])
 
@@ -875,6 +971,14 @@ def build_month_pdf(year: int, month: int):
     }
     for row_index, shift_type in highlighted_rows:
         table_style_commands.append(("BACKGROUND", (0, row_index), (-1, row_index), highlight_colors[shift_type]))
+    for row_index in weekly_summary_rows:
+        table_style_commands.extend(
+            [
+                ("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#EEF4FF")),
+                ("FONTNAME", (0, row_index), (-1, row_index), "Helvetica-Bold"),
+                ("LINEABOVE", (0, row_index), (-1, row_index), 0.45, colors.HexColor("#B8CBE3")),
+            ]
+        )
 
     table.setStyle(TableStyle(table_style_commands))
     story.append(table)

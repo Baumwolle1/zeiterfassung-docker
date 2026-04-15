@@ -147,12 +147,20 @@
       <strong class="{{ balance_class(selected_totals.balance) }}">{{ format_minutes(selected_totals.balance) }}</strong>
     </article>
     <article class="summary-card glass">
-      <span>Woche</span>
+      <span>Aktuelle KW</span>
       <strong id="summary-week-bottom">{{ week_balance }}</strong>
     </article>
     <article class="summary-card glass">
-      <span>Monat Ist</span>
+      <span>Monat gesamt</span>
       <strong id="summary-month-bottom">{{ month_progress }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Monat Soll</span>
+      <strong id="summary-month-target-bottom">{{ month_target }}</strong>
+    </article>
+    <article class="summary-card glass">
+      <span>Gleitzeit Monat</span>
+      <strong id="summary-month-balance-bottom" class="{{ month_balance_class }}">{{ month_balance }}</strong>
     </article>
     <article class="summary-card glass">
       <span>Urlaub genommen</span>
@@ -166,6 +174,33 @@
       <span>Kranktage Jahr</span>
       <strong id="summary-sick-days">{{ sick_days }}</strong>
     </article>
+  </section>
+
+  <section class="glass weekly-overview">
+    <div class="weekly-overview-head">
+      <div>
+        <p class="eyebrow">Monatsuebersicht</p>
+        <h2>KW-Abrechnung</h2>
+      </div>
+      <div class="weekly-overview-totals">
+        <span>Monat gesamt {{ month_progress }}</span>
+      </div>
+    </div>
+    <div class="weekly-list" id="weekly-summary-list">
+      {% for summary in week_summaries %}
+        <article class="weekly-card glass">
+          <div>
+            <span>{{ summary.label }}</span>
+            <strong>{{ summary.range }}</strong>
+          </div>
+          <div class="weekly-metrics">
+            <span>Soll {{ summary.target }}</span>
+            <span>Ist {{ summary.actual }}</span>
+            <strong class="{{ summary.balance_class }}">Saldo {{ summary.balance }}</strong>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
   </section>
 
   <footer class="version-footer">
@@ -188,9 +223,12 @@
   const summaryMonth = document.getElementById("summary-month");
   const summaryWeekBottom = document.getElementById("summary-week-bottom");
   const summaryMonthBottom = document.getElementById("summary-month-bottom");
+  const summaryMonthTargetBottom = document.getElementById("summary-month-target-bottom");
+  const summaryMonthBalanceBottom = document.getElementById("summary-month-balance-bottom");
   const summaryVacationUsed = document.getElementById("summary-vacation-used");
   const summaryVacationLeft = document.getElementById("summary-vacation-left");
   const summarySickDays = document.getElementById("summary-sick-days");
+  const weeklySummaryList = document.getElementById("weekly-summary-list");
   const todayLink = document.querySelector('.hero-actions a.button.soft');
   const selectedDayCard = document.querySelector("[data-selected-day-card]");
   const notesInput = form.querySelector('textarea[name="notes"]');
@@ -343,10 +381,30 @@
           <button class="button stamp-button" type="button" data-stamp="start" data-index="${index}">Arbeitsbeginn</button>
           <button class="button stamp-button" type="button" data-stamp="end" data-index="${index}">Arbeitsende</button>
         </div>
-        ${isNotdienst && index === 0 ? `<button class="button soft add-segment-inline" type="button" data-add-segment>Weitere Zeit hinzufuegen +</button>` : ""}
+        ${isNotdienst && index === 0 ? `<button class="button soft add-segment-inline" type="button" data-add-segment>Weitere Zeit hinzufügen +</button>` : ""}
         ${isNotdienst && index > 0 ? `<button class="button soft tiny remove-segment-button" type="button" data-remove-segment="${index}">Eintrag entfernen</button>` : ""}
       `;
       timeSegments.appendChild(row);
+    });
+  }
+
+  function renderWeekSummaries(weekSummaries = []) {
+    weeklySummaryList.innerHTML = "";
+    weekSummaries.forEach((summary) => {
+      const article = document.createElement("article");
+      article.className = "weekly-card glass";
+      article.innerHTML = `
+        <div>
+          <span>${summary.label}</span>
+          <strong>${summary.range}</strong>
+        </div>
+        <div class="weekly-metrics">
+          <span>Soll ${summary.target}</span>
+          <span>Ist ${summary.actual}</span>
+          <strong class="${summary.balance_class}">Saldo ${summary.balance}</strong>
+        </div>
+      `;
+      weeklySummaryList.appendChild(article);
     });
   }
 
@@ -424,9 +482,15 @@
     summaryMonth.textContent = data.month_progress;
     summaryWeekBottom.textContent = data.week_balance;
     summaryMonthBottom.textContent = data.month_progress;
+    summaryMonthTargetBottom.textContent = data.month_target;
+    summaryMonthBalanceBottom.textContent = data.month_balance;
+    summaryMonthBalanceBottom.className = data.month_balance_class;
     summaryVacationUsed.textContent = `${data.vacation_taken} / ${vacationTotal}`;
     summaryVacationLeft.textContent = data.vacation_remaining;
     summarySickDays.textContent = data.sick_days;
+    if (Array.isArray(data.week_summaries)) {
+      renderWeekSummaries(data.week_summaries);
+    }
 
     if (selectedDayCard) {
       selectedDayCard.href = data.day_href;
@@ -542,7 +606,6 @@
       segmentState.push({ start: "", end: "" });
       renderSegments();
       updateSummary();
-      saveForm({ immediate: true });
       return;
     }
 
@@ -625,6 +688,7 @@
   });
 
   syncClientTodayCookie();
+  renderWeekSummaries({{ week_summaries | tojson }});
   applyShiftDefaults(false);
 </script>
 {% endblock %}
