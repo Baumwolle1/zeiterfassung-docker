@@ -13,7 +13,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 APP_TITLE = "Zeiterfassung"
@@ -858,7 +858,6 @@ def shift_month(base: date, delta: int) -> date:
 def build_month_pdf(year: int, month: int):
     month_entries = fetch_month_entries(year, month)
     _, days_in_month = calendar.monthrange(year, month)
-    header_row = ["Datum", "Beginn", "Ende", "Ist", "Saldo", "Notiz"]
     month_actual = 0
     month_balance = 0
     week_sections: list[dict] = []
@@ -883,9 +882,8 @@ def build_month_pdf(year: int, month: int):
         ]
         current_week_highlights = []
 
-    def finalize_week(week_number: int) -> None:
+    def finish_week(week_number: int) -> None:
         rows = list(current_week_rows)
-        highlight_rows = list(current_week_highlights)
         rows.append(
             [
                 f"KW {week_number:02d} gesamt",
@@ -896,13 +894,7 @@ def build_month_pdf(year: int, month: int):
                 "",
             ]
         )
-        week_sections.append(
-            {
-                "week_number": week_number,
-                "rows": rows,
-                "highlights": highlight_rows,
-            }
-        )
+        week_sections.append({"rows": rows, "highlights": list(current_week_highlights)})
 
     for day_number in range(1, days_in_month + 1):
         current = date(year, month, day_number)
@@ -910,7 +902,7 @@ def build_month_pdf(year: int, month: int):
         if current_week_key is None:
             start_week(week_key[1], current)
         elif week_key != current_week_key:
-            finalize_week(current_week_key[1])
+            finish_week(current_week_key[1])
             current_week_actual = 0
             current_week_balance = 0
             start_week(week_key[1], current)
@@ -957,12 +949,17 @@ def build_month_pdf(year: int, month: int):
                 current_week_highlights.append((len(current_week_rows) - 1, shift_type))
 
     if current_week_key is not None:
-        finalize_week(current_week_key[1])
+        finish_week(current_week_key[1])
 
     buffer = io.BytesIO()
     document = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=12 * mm, leftMargin=12 * mm, topMargin=12 * mm, bottomMargin=12 * mm)
     styles = getSampleStyleSheet()
-    story = []
+    story = [
+        Paragraph(f"Zeiterfassung {MONTH_NAMES[month - 1]} {year}", styles["Title"]),
+        Spacer(1, 6),
+        Paragraph("Monatsuebersicht mit Wochen- und Monatsstunden.", styles["BodyText"]),
+        Spacer(1, 14),
+    ]
     highlight_colors = {
         "Notdienst": colors.HexColor("#E9D8FF"),
         "Urlaub": colors.HexColor("#E3F5D8"),
@@ -971,27 +968,27 @@ def build_month_pdf(year: int, month: int):
         "Feiertag": colors.HexColor("#FFD9D6"),
     }
 
-    def make_week_card(section: dict) -> Table:
-        card_data = [header_row] + section["rows"]
-        table = Table(card_data, colWidths=[22 * mm, 12 * mm, 12 * mm, 13 * mm, 13 * mm, 46 * mm])
-        style = [
+    def make_week_table(section: dict) -> Table:
+        week_data = [["Datum", "Beginn", "Ende", "Ist", "Saldo", "Notiz"]] + section["rows"]
+        table = Table(week_data, colWidths=[24 * mm, 14 * mm, 14 * mm, 14 * mm, 14 * mm, 58 * mm])
+        commands = [
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#CFE0FF")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#16325C")),
-            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#C9D7E6")),
+            ("GRID", (0, 0), (-1, -1), 0.32, colors.HexColor("#C9D7E6")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 6.7),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 4),
-            ("TOPPADDING", (0, 0), (-1, 0), 4),
-            ("BOTTOMPADDING", (0, 1), (-1, -1), 3),
-            ("TOPPADDING", (0, 1), (-1, -1), 3),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.6),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 5),
+            ("TOPPADDING", (0, 0), (-1, 0), 5),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+            ("TOPPADDING", (0, 1), (-1, -1), 4),
             ("ALIGN", (1, 0), (-2, -1), "CENTER"),
             ("ALIGN", (0, 0), (0, -1), "LEFT"),
             ("ALIGN", (-1, 1), (-1, -1), "LEFT"),
         ]
         week_header_row = 1
-        week_summary_row = len(card_data) - 1
-        style.extend(
+        week_summary_row = len(week_data) - 1
+        commands.extend(
             [
                 ("BACKGROUND", (0, week_header_row), (-1, week_header_row), colors.HexColor("#DCEBFF")),
                 ("TEXTCOLOR", (0, week_header_row), (-1, week_header_row), colors.HexColor("#16325C")),
@@ -1003,12 +1000,12 @@ def build_month_pdf(year: int, month: int):
             ]
         )
         for row_index, shift_type in section["highlights"]:
-            style.append(("BACKGROUND", (0, row_index + 1), (-1, row_index + 1), highlight_colors[shift_type]))
-        table.setStyle(TableStyle(style))
+            commands.append(("BACKGROUND", (0, row_index + 1), (-1, row_index + 1), highlight_colors[shift_type]))
+        table.setStyle(TableStyle(commands))
         return table
 
-    def make_summary_block() -> Table:
-        summary_data = [
+    def make_summary_table() -> Table:
+        summary = [
             ["Monat gesamt", format_minutes(month_actual), format_minutes(month_balance)],
             ["", "", ""],
             ["Legende", "", ""],
@@ -1018,76 +1015,43 @@ def build_month_pdf(year: int, month: int):
             ["", "Arztkrank", ""],
             ["", "Feiertag", ""],
         ]
-        table = Table(summary_data, colWidths=[34 * mm, 32 * mm, 56 * mm])
-        style = [
+        table = Table(summary, colWidths=[28 * mm, 34 * mm, 48 * mm])
+        commands = [
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EAF3FF")),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#F4F8FD")),
             ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
             ("SPAN", (0, 2), (-1, 2)),
-            ("GRID", (0, 0), (-1, 0), 0.35, colors.HexColor("#C9D7E6")),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("FONTSIZE", (0, 0), (-1, -1), 7.2),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.8),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ]
-        legend_rows = {
-            3: "Notdienst",
-            4: "Urlaub",
-            5: "Krank",
-            6: "Arztkrank",
-            7: "Feiertag",
-        }
+        legend_rows = {3: "Notdienst", 4: "Urlaub", 5: "Krank", 6: "Arztkrank", 7: "Feiertag"}
         for row_index, shift_type in legend_rows.items():
-            style.extend(
+            commands.extend(
                 [
                     ("BACKGROUND", (0, row_index), (0, row_index), highlight_colors[shift_type]),
                     ("BOX", (0, row_index), (0, row_index), 0.3, colors.HexColor("#B7C6D9")),
                     ("SPAN", (1, row_index), (2, row_index)),
                 ]
             )
-        table.setStyle(TableStyle(style))
+        table.setStyle(TableStyle(commands))
         return table
 
-    first_page_sections = week_sections[:2]
-    remaining_sections = week_sections[2:]
-    second_page_sections = remaining_sections[:3]
+    for index in range(0, len(week_sections), 2):
+        row_tables = [make_week_table(week_sections[index])]
+        if index + 1 < len(week_sections):
+            row_tables.append(make_week_table(week_sections[index + 1]))
+        elif index == len(week_sections) - 1:
+            row_tables.append(make_summary_table())
 
-    def append_page_intro(page_number: int, page_count: int) -> None:
-        story.extend(
-            [
-                Paragraph(f"Zeiterfassung {MONTH_NAMES[month - 1]} {year}", styles["Title"] if page_number == 1 else styles["Heading2"]),
-                Spacer(1, 4),
-                Paragraph(f"Monatsuebersicht mit Wochen- und Monatsstunden. Seite {page_number} von {page_count}.", styles["BodyText"]),
-                Spacer(1, 8),
-            ]
-        )
+        row = Table([row_tables], colWidths=[136 * mm, 136 * mm])
+        row.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        story.append(KeepTogether([row, Spacer(1, 10)]))
 
-    page_count = 1 if not second_page_sections else 2
-    append_page_intro(1, page_count)
-    first_page_cards = [[make_week_card(section) for section in first_page_sections]]
-    first_page_grid = Table(first_page_cards, colWidths=[138 * mm, 138 * mm])
-    first_page_grid.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
-    story.append(KeepTogether(first_page_grid))
-
-    if second_page_sections:
-        story.append(PageBreak())
-        append_page_intro(2, page_count)
-        page_two_rows = []
-        for row_start in range(0, len(second_page_sections), 2):
-            row_sections = second_page_sections[row_start:row_start + 2]
-            row_cards = [make_week_card(section) for section in row_sections]
-            if len(row_cards) == 1:
-                row_cards.append(make_summary_block())
-            page_two_rows.append(row_cards)
-        if len(second_page_sections) % 2 == 0:
-            page_two_rows.append([make_summary_block(), Spacer(1, 1)])
-        second_page_grid = Table(page_two_rows, colWidths=[138 * mm, 138 * mm])
-        second_page_grid.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("BOTTOMPADDING", (0, 0), (-1, -1), 10)]))
-        story.append(KeepTogether(second_page_grid))
-    else:
-        story.append(Spacer(1, 12))
-        story.append(make_summary_block())
+    if len(week_sections) % 2 == 0:
+        story.append(make_summary_table())
     document.build(story)
     buffer.seek(0)
     return buffer
