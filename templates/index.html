@@ -374,11 +374,11 @@
             <input data-segment-end data-index="${index}" type="text" value="${segment.end}" placeholder="15:00">
           </label>
         </div>
+        ${isNotdienst && index === 0 ? `<div class="add-segment-wrap"><button class="button add-segment-inline" type="button" data-add-segment>Weitere Zeit hinzuf&uuml;gen</button></div>` : ""}
         <div class="stamp-actions">
           <button class="button stamp-button" type="button" data-stamp="start" data-index="${index}">Arbeitsbeginn</button>
           <button class="button stamp-button" type="button" data-stamp="end" data-index="${index}">Arbeitsende</button>
         </div>
-        ${isNotdienst && index === 0 ? `<button class="button soft add-segment-inline" type="button" data-add-segment>Weitere Zeit hinzufügen +</button>` : ""}
         ${isNotdienst && index > 0 ? `<button class="button soft tiny remove-segment-button" type="button" data-remove-segment="${index}">Eintrag entfernen</button>` : ""}
       `;
       timeSegments.appendChild(row);

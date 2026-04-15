@@ -405,11 +405,24 @@ input:focus, select:focus, textarea:focus {
 .remove-segment-button {
   justify-self: flex-end;
 }
+.add-segment-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 4px;
+}
 .add-segment-inline {
-  justify-self: flex-start;
-  border-color: rgba(109, 49, 199, 0.18);
-  color: #6d31c7;
-  background: #efe4ff;
+  min-height: 48px;
+  min-width: min(100%, 320px);
+  padding: 0 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(75, 134, 255, 0.24);
+  color: #255cc7;
+  background: linear-gradient(135deg, rgba(75, 134, 255, 0.16), rgba(145, 194, 255, 0.34));
+  box-shadow: 0 10px 26px rgba(95, 138, 201, 0.16);
+  font-weight: 800;
+}
+.add-segment-inline:hover {
+  background: linear-gradient(135deg, rgba(75, 134, 255, 0.22), rgba(145, 194, 255, 0.42));
 }
 .stamp-actions {
   display: grid;
