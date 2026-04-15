@@ -1,5 +1,6 @@
 import calendar
 import io
+import json
 import os
 import sqlite3
 from dataclasses import dataclass
@@ -60,6 +61,60 @@ class Totals:
     actual: int
     balance: int
     deducted_break: int
+
+
+def default_segments_for_shift(shift_type: str, start_time: str = "", end_time: str = "") -> list[dict[str, str]]:
+    if shift_type not in WORK_TYPES:
+        return []
+    start_value = start_time or SHIFT_CONFIG[shift_type]["start"]
+    end_value = end_time or SHIFT_CONFIG[shift_type]["end"]
+    if shift_type == "Notdienst":
+        if start_time or end_time:
+            return [{"start": start_time, "end": end_time}]
+        return [{"start": "", "end": ""}]
+    return [{"start": start_value, "end": end_value}]
+
+
+def normalize_segments(raw_segments) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    if not isinstance(raw_segments, list):
+        return normalized
+    for segment in raw_segments:
+        if not isinstance(segment, dict):
+            continue
+        start_time = normalize_time(str(segment.get("start", "")))
+        end_time = normalize_time(str(segment.get("end", "")))
+        if not start_time and not end_time:
+            continue
+        normalized.append({"start": start_time, "end": end_time})
+    return normalized
+
+
+def segments_for_entry(shift_type: str, start_time: str, end_time: str, segments_json: str | None = None) -> list[dict[str, str]]:
+    segments: list[dict[str, str]] = []
+    if segments_json:
+        try:
+            segments = normalize_segments(json.loads(segments_json))
+        except json.JSONDecodeError:
+            segments = []
+    if segments:
+        return segments
+    return normalize_segments(default_segments_for_shift(shift_type, start_time, end_time))
+
+
+def entry_payload(shift_type: str, start_time: str, end_time: str, notes: str, segments: list[dict[str, str]] | None = None) -> dict:
+    resolved_segments = normalize_segments(segments if segments is not None else default_segments_for_shift(shift_type, start_time, end_time))
+    primary = resolved_segments[0] if resolved_segments else {"start": "", "end": ""}
+    if shift_type not in WORK_TYPES:
+        primary = {"start": "", "end": ""}
+        resolved_segments = []
+    return {
+        "shift_type": shift_type,
+        "start_time": primary["start"],
+        "end_time": primary["end"],
+        "notes": notes or "",
+        "segments": resolved_segments,
+    }
 
 
 def create_app() -> Flask:
@@ -151,6 +206,7 @@ def create_app() -> Flask:
                 shift_type,
                 (entry["start_time"] if entry else "") or "",
                 (entry["end_time"] if entry else "") or "",
+                (entry["segments"] if entry else []) or [],
             )
             days.append(
                 {
@@ -171,14 +227,14 @@ def create_app() -> Flask:
         form_data = (
             entry
             if entry
-            else {
-                "shift_type": default_type_for(selected_date),
-                "start_time": SHIFT_CONFIG[default_type_for(selected_date)]["start"],
-                "end_time": SHIFT_CONFIG[default_type_for(selected_date)]["end"],
-                "notes": "",
-            }
+            else entry_payload(default_type_for(selected_date), "", "", "")
         )
-        selected_totals = calculate_totals(form_data["shift_type"], form_data["start_time"], form_data["end_time"])
+        selected_totals = calculate_totals(
+            form_data["shift_type"],
+            form_data["start_time"],
+            form_data["end_time"],
+            form_data["segments"],
+        )
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, form_data)
         month_progress = calculate_month_progress(year, month, month_entries, selected_date, form_data, today)
         vacation_taken, sick_days = count_special_days(year)
@@ -226,6 +282,14 @@ def create_app() -> Flask:
         selected_date = date(year, month, day)
 
         shift_type = request.form["shift_type"]
+        submitted_segments = [
+            {"start": start_value, "end": end_value}
+            for start_value, end_value in zip(
+                request.form.getlist("segment_start[]"),
+                request.form.getlist("segment_end[]"),
+            )
+        ]
+        segments = normalize_segments(submitted_segments)
         start_time = normalize_time(request.form.get("start_time", ""))
         end_time = normalize_time(request.form.get("end_time", ""))
         notes = request.form.get("notes", "")
@@ -236,7 +300,12 @@ def create_app() -> Flask:
         if shift_type not in WORK_TYPES:
             start_time = ""
             end_time = ""
-        save_entry(selected_date, shift_type, start_time, end_time, notes)
+            segments = []
+        elif not segments:
+            segments = normalize_segments(default_segments_for_shift(shift_type, start_time, end_time))
+
+        payload = entry_payload(shift_type, start_time, end_time, notes, segments)
+        save_entry(selected_date, payload["shift_type"], payload["start_time"], payload["end_time"], payload["notes"], payload["segments"])
         return redirect(url_for("index", year=year, month=month, day=day, view=view_mode))
 
     @app.post("/save-json")
@@ -250,6 +319,8 @@ def create_app() -> Flask:
         selected_date = date(year, month, day)
 
         shift_type = payload.get("shift_type", default_type_for(selected_date))
+        submitted_segments = payload.get("segments", [])
+        segments = normalize_segments(submitted_segments)
         start_time = normalize_time(payload.get("start_time", ""))
         end_time = normalize_time(payload.get("end_time", ""))
         notes = payload.get("notes", "") or ""
@@ -260,10 +331,13 @@ def create_app() -> Flask:
         if shift_type not in WORK_TYPES:
             start_time = ""
             end_time = ""
+            segments = []
+        elif not segments:
+            segments = normalize_segments(default_segments_for_shift(shift_type, start_time, end_time))
 
-        save_entry(selected_date, shift_type, start_time, end_time, notes)
-        entry = {"shift_type": shift_type, "start_time": start_time, "end_time": end_time, "notes": notes}
-        totals = calculate_totals(shift_type, start_time, end_time)
+        entry = entry_payload(shift_type, start_time, end_time, notes, segments)
+        save_entry(selected_date, entry["shift_type"], entry["start_time"], entry["end_time"], entry["notes"], entry["segments"])
+        totals = calculate_totals(entry["shift_type"], entry["start_time"], entry["end_time"], entry["segments"])
         month_entries = fetch_month_entries(year, month)
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, entry)
         today = client_today_from_request() or date.today()
@@ -273,9 +347,10 @@ def create_app() -> Flask:
             {
                 "ok": True,
                 "shift_type": shift_type,
-                "start_time": start_time,
-                "end_time": end_time,
-                "notes": notes,
+                "start_time": entry["start_time"],
+                "end_time": entry["end_time"],
+                "notes": entry["notes"],
+                "segments": entry["segments"],
                 "target": format_minutes(totals.target),
                 "actual": format_minutes(totals.actual),
                 "balance": format_minutes(totals.balance),
@@ -313,23 +388,23 @@ def create_app() -> Flask:
             existing_entry = fetch_entry(current)
             if holiday_name_for(current):
                 notes = existing_entry["notes"] if existing_entry else ""
-                save_entry(current, "Feiertag", "", "", notes)
+                save_entry(current, "Feiertag", "", "", notes, [])
                 continue
             if current.weekday() == 4:
                 notes = existing_entry["notes"] if existing_entry else ""
                 start_time = (existing_entry["start_time"] if existing_entry else "") or SHIFT_CONFIG["Freitag"]["start"]
                 end_time = (existing_entry["end_time"] if existing_entry else "") or SHIFT_CONFIG["Freitag"]["end"]
-                save_entry(current, "Freitag", start_time, end_time, notes)
+                save_entry(current, "Freitag", start_time, end_time, notes, existing_entry["segments"] if existing_entry else None)
                 continue
             if current.weekday() >= 5:
                 notes = existing_entry["notes"] if existing_entry else ""
-                save_entry(current, "Frei", "", "", notes)
+                save_entry(current, "Frei", "", "", notes, [])
                 continue
             defaults = SHIFT_CONFIG[template_type]
             notes = existing_entry["notes"] if existing_entry else ""
             start_time = (existing_entry["start_time"] if existing_entry else "") or defaults["start"]
             end_time = (existing_entry["end_time"] if existing_entry else "") or defaults["end"]
-            save_entry(current, template_type, start_time, end_time, notes)
+            save_entry(current, template_type, start_time, end_time, notes, existing_entry["segments"] if existing_entry else None)
 
         return redirect(url_for("index", year=year, month=month, day=day, view="week"))
 
@@ -381,13 +456,21 @@ def create_app() -> Flask:
             if not end_time:
                 end_time = SHIFT_CONFIG[shift_type]["end"]
 
-        save_entry(selected_date, shift_type, start_time, end_time, notes)
-        totals = calculate_totals(shift_type, start_time, end_time)
+        segments = entry["segments"] if entry else normalize_segments(default_segments_for_shift(shift_type, start_time, end_time))
+        if not segments:
+            segments = normalize_segments(default_segments_for_shift(shift_type, start_time, end_time))
+        if segments:
+            segments[0][field] = value
+
+        payload = entry_payload(shift_type, start_time, end_time, notes, segments)
+        save_entry(selected_date, payload["shift_type"], payload["start_time"], payload["end_time"], payload["notes"], payload["segments"])
+        totals = calculate_totals(payload["shift_type"], payload["start_time"], payload["end_time"], payload["segments"])
         return jsonify(
             {
                 "ok": True,
-                "start_time": start_time,
-                "end_time": end_time,
+                "start_time": payload["start_time"],
+                "end_time": payload["end_time"],
+                "segments": payload["segments"],
                 "target": format_minutes(totals.target),
                 "actual": format_minutes(totals.actual),
                 "balance": format_minutes(totals.balance),
@@ -424,17 +507,20 @@ def init_db() -> None:
             )
             """
         )
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(entries)").fetchall()}
+        if "segments_json" not in columns:
+            conn.execute("ALTER TABLE entries ADD COLUMN segments_json TEXT DEFAULT '[]'")
 
 
 def fetch_entry(day_value: date) -> dict | None:
     with sqlite3.connect(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT shift_type, start_time, end_time, notes FROM entries WHERE entry_date = ?",
+            "SELECT shift_type, start_time, end_time, notes, segments_json FROM entries WHERE entry_date = ?",
             (day_value.isoformat(),),
         ).fetchone()
     if not row:
         return None
-    return {"shift_type": row[0], "start_time": row[1] or "", "end_time": row[2] or "", "notes": row[3] or ""}
+    return entry_payload(row[0], row[1] or "", row[2] or "", row[3] or "", segments_for_entry(row[0], row[1] or "", row[2] or "", row[4] or "[]"))
 
 
 def fetch_month_entries(year: int, month: int) -> dict[str, dict]:
@@ -443,29 +529,45 @@ def fetch_month_entries(year: int, month: int) -> dict[str, dict]:
     end = date(year, month, days_in_month)
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
-            "SELECT entry_date, shift_type, start_time, end_time, notes FROM entries WHERE entry_date BETWEEN ? AND ?",
+            "SELECT entry_date, shift_type, start_time, end_time, notes, segments_json FROM entries WHERE entry_date BETWEEN ? AND ?",
             (start.isoformat(), end.isoformat()),
         ).fetchall()
     return {
-        row[0]: {"shift_type": row[1], "start_time": row[2] or "", "end_time": row[3] or "", "notes": row[4] or ""}
+        row[0]: entry_payload(
+            row[1],
+            row[2] or "",
+            row[3] or "",
+            row[4] or "",
+            segments_for_entry(row[1], row[2] or "", row[3] or "", row[5] or "[]"),
+        )
         for row in rows
     }
 
 
-def save_entry(day_value: date, shift_type: str, start_time: str, end_time: str, notes: str) -> None:
+def save_entry(day_value: date, shift_type: str, start_time: str, end_time: str, notes: str, segments: list[dict[str, str]] | None = None) -> None:
+    payload = entry_payload(shift_type, start_time, end_time, notes, segments)
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
-            INSERT INTO entries (entry_date, shift_type, start_time, end_time, notes, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO entries (entry_date, shift_type, start_time, end_time, notes, updated_at, segments_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(entry_date) DO UPDATE SET
                 shift_type = excluded.shift_type,
                 start_time = excluded.start_time,
                 end_time = excluded.end_time,
                 notes = excluded.notes,
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at,
+                segments_json = excluded.segments_json
             """,
-            (day_value.isoformat(), shift_type, start_time, end_time, notes, datetime.now().isoformat(timespec="seconds")),
+            (
+                day_value.isoformat(),
+                payload["shift_type"],
+                payload["start_time"],
+                payload["end_time"],
+                payload["notes"],
+                datetime.now().isoformat(timespec="seconds"),
+                json.dumps(payload["segments"], ensure_ascii=True),
+            ),
         )
 
 
@@ -549,13 +651,25 @@ def normalize_time(value: str) -> str:
     return f"{digits[:2]}:{digits[2:]}"
 
 
-def calculate_totals(shift_type: str, start_time: str, end_time: str) -> Totals:
+def calculate_totals(shift_type: str, start_time: str, end_time: str, segments: list[dict[str, str]] | None = None) -> Totals:
     config = SHIFT_CONFIG[shift_type]
     if shift_type not in WORK_TYPES:
         return Totals(target=config["target"], actual=0, balance=0, deducted_break=0)
 
-    start_minutes = parse_time(start_time)
-    end_minutes = parse_time(end_time)
+    resolved_segments = normalize_segments(segments if segments is not None else default_segments_for_shift(shift_type, start_time, end_time))
+    if shift_type == "Notdienst":
+        actual = 0
+        for segment in resolved_segments:
+            start_minutes = parse_time(segment["start"])
+            end_minutes = parse_time(segment["end"])
+            if start_minutes is None or end_minutes is None or end_minutes < start_minutes:
+                continue
+            actual += end_minutes - start_minutes
+        return Totals(target=config["target"], actual=actual, balance=actual - config["target"], deducted_break=0)
+
+    primary = resolved_segments[0] if resolved_segments else {"start": start_time, "end": end_time}
+    start_minutes = parse_time(primary["start"])
+    end_minutes = parse_time(primary["end"])
     if start_minutes is None or end_minutes is None or end_minutes < start_minutes:
         return Totals(target=config["target"], actual=0, balance=-config["target"], deducted_break=0)
 
@@ -617,10 +731,15 @@ def calculate_month_progress(
 
 def totals_for_day(day_value: date, month_entries: dict[str, dict], selected_date: date, selected_form: dict) -> Totals:
     if day_value == selected_date:
-        return calculate_totals(selected_form["shift_type"], selected_form["start_time"], selected_form["end_time"])
+        return calculate_totals(selected_form["shift_type"], selected_form["start_time"], selected_form["end_time"], selected_form["segments"])
     entry = month_entries.get(day_value.isoformat())
     shift_type = entry["shift_type"] if entry else default_type_for(day_value)
-    return calculate_totals(shift_type, (entry["start_time"] if entry else "") or "", (entry["end_time"] if entry else "") or "")
+    return calculate_totals(
+        shift_type,
+        (entry["start_time"] if entry else "") or "",
+        (entry["end_time"] if entry else "") or "",
+        (entry["segments"] if entry else []) or [],
+    )
 
 
 def format_minutes(value: int) -> str:
@@ -690,22 +809,31 @@ def build_month_pdf(year: int, month: int):
         current = date(year, month, day_number)
         entry = month_entries.get(current.isoformat())
         shift_type = entry["shift_type"] if entry else default_type_for(current)
-        totals = calculate_totals(shift_type, (entry["start_time"] if entry else "") or "", (entry["end_time"] if entry else "") or "")
+        segments = (entry["segments"] if entry else []) or []
+        totals = calculate_totals(
+            shift_type,
+            (entry["start_time"] if entry else "") or "",
+            (entry["end_time"] if entry else "") or "",
+            segments,
+        )
         month_target += totals.target
         month_actual += totals.actual
-        data.append(
-            [
-                f"{WEEKDAY_SHORT[current.weekday()]} {current.strftime('%d.%m.%Y')}",
-                (entry["start_time"] if entry else "") or "-",
-                (entry["end_time"] if entry else "") or "-",
-                format_minutes(totals.target),
-                format_minutes(totals.actual),
-                format_minutes(totals.balance),
-                (entry["notes"] if entry else "") or "-",
-            ]
-        )
-        if shift_type in {"Urlaub", "Krank", "Arztkrank", "Feiertag"}:
-            highlighted_rows.append((len(data) - 1, shift_type))
+        day_segments = segments if shift_type == "Notdienst" and segments else [{"start": (entry["start_time"] if entry else "") or "-", "end": (entry["end_time"] if entry else "") or "-"}]
+        notes_value = (entry["notes"] if entry else "") or "-"
+        for segment_index, segment in enumerate(day_segments):
+            data.append(
+                [
+                    f"{WEEKDAY_SHORT[current.weekday()]} {current.strftime('%d.%m.%Y')}" if segment_index == 0 else "",
+                    segment.get("start") or "-",
+                    segment.get("end") or "-",
+                    format_minutes(totals.target) if segment_index == 0 else "",
+                    format_minutes(totals.actual) if segment_index == 0 else "",
+                    format_minutes(totals.balance) if segment_index == 0 else "",
+                    notes_value if segment_index == 0 else "",
+                ]
+            )
+            if shift_type in {"Urlaub", "Krank", "Arztkrank", "Feiertag", "Notdienst"}:
+                highlighted_rows.append((len(data) - 1, shift_type))
 
     data.append(["Monat gesamt", "", "", format_minutes(month_target), format_minutes(month_actual), format_minutes(month_actual - month_target), ""])
 
@@ -739,6 +867,7 @@ def build_month_pdf(year: int, month: int):
         ("LINEABOVE", (0, -1), (-1, -1), 0.6, colors.HexColor("#9EB6D1")),
     ]
     highlight_colors = {
+        "Notdienst": colors.HexColor("#E9D8FF"),
         "Urlaub": colors.HexColor("#E3F5D8"),
         "Krank": colors.HexColor("#FFF2B8"),
         "Arztkrank": colors.HexColor("#FFD8AE"),
@@ -751,19 +880,21 @@ def build_month_pdf(year: int, month: int):
     story.append(table)
     story.append(Spacer(1, 12))
 
-    legend_data = [["", "Urlaub", "", "Krank", "", "Arztkrank", "", "Feiertag"]]
-    legend = Table(legend_data, colWidths=[8 * mm, 20 * mm, 8 * mm, 18 * mm, 8 * mm, 24 * mm, 8 * mm, 24 * mm])
+    legend_data = [["", "Notdienst", "", "Urlaub", "", "Krank", "", "Arztkrank", "", "Feiertag"]]
+    legend = Table(legend_data, colWidths=[8 * mm, 22 * mm, 8 * mm, 20 * mm, 8 * mm, 18 * mm, 8 * mm, 24 * mm, 8 * mm, 24 * mm])
     legend.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (0, 0), highlight_colors["Urlaub"]),
-                ("BACKGROUND", (2, 0), (2, 0), highlight_colors["Krank"]),
-                ("BACKGROUND", (4, 0), (4, 0), highlight_colors["Arztkrank"]),
-                ("BACKGROUND", (6, 0), (6, 0), highlight_colors["Feiertag"]),
-                ("BOX", (0, 0), (0, 0), 0.35, colors.HexColor("#98B58B")),
-                ("BOX", (2, 0), (2, 0), 0.35, colors.HexColor("#C8B15B")),
-                ("BOX", (4, 0), (4, 0), 0.35, colors.HexColor("#CC9A53")),
-                ("BOX", (6, 0), (6, 0), 0.35, colors.HexColor("#C38C86")),
+                ("BACKGROUND", (0, 0), (0, 0), highlight_colors["Notdienst"]),
+                ("BACKGROUND", (2, 0), (2, 0), highlight_colors["Urlaub"]),
+                ("BACKGROUND", (4, 0), (4, 0), highlight_colors["Krank"]),
+                ("BACKGROUND", (6, 0), (6, 0), highlight_colors["Arztkrank"]),
+                ("BACKGROUND", (8, 0), (8, 0), highlight_colors["Feiertag"]),
+                ("BOX", (0, 0), (0, 0), 0.35, colors.HexColor("#A58BC7")),
+                ("BOX", (2, 0), (2, 0), 0.35, colors.HexColor("#98B58B")),
+                ("BOX", (4, 0), (4, 0), 0.35, colors.HexColor("#C8B15B")),
+                ("BOX", (6, 0), (6, 0), 0.35, colors.HexColor("#CC9A53")),
+                ("BOX", (8, 0), (8, 0), 0.35, colors.HexColor("#C38C86")),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("FONTNAME", (1, 0), (-1, -1), "Helvetica"),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),

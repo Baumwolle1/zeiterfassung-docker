@@ -34,20 +34,8 @@
           {% endfor %}
         </div>
 
-        <div class="time-grid">
-          <label>
-            <span>Beginn</span>
-            <input data-time-input type="text" name="start_time" id="start_time" value="{{ form_data.start_time }}" placeholder="06:45">
-          </label>
-          <label>
-            <span>Ende</span>
-            <input data-time-input type="text" name="end_time" id="end_time" value="{{ form_data.end_time }}" placeholder="15:00">
-          </label>
-        </div>
-
-        <div class="stamp-actions">
-          <button class="button stamp-button" type="button" id="set-start-now">Arbeitsbeginn</button>
-          <button class="button stamp-button" type="button" id="set-end-now">Arbeitsende</button>
+        <div class="time-blocks">
+          <div id="time-segments"></div>
         </div>
 
         <label>
@@ -189,11 +177,9 @@
   const form = document.querySelector(".entry-form");
   const currentView = {{ view_mode | tojson }};
   const shiftSelect = document.getElementById("shift_type");
-  const startInput = document.getElementById("start_time");
-  const endInput = document.getElementById("end_time");
-  const startNowButton = document.getElementById("set-start-now");
-  const endNowButton = document.getElementById("set-end-now");
+  const timeSegments = document.getElementById("time-segments");
   const defaults = {{ shift_config | tojson }};
+  const initialSegments = {{ form_data.segments | tojson }};
   const summaryTarget = document.querySelector(".summary-card:nth-child(1) strong");
   const summaryActual = document.querySelector(".summary-card:nth-child(2) strong");
   const summaryBalance = document.querySelector(".summary-card:nth-child(3) strong");
@@ -213,10 +199,12 @@
   const hiddenAtKey = "zeiterfassung-hidden-at";
   const skipResumeKey = "zeiterfassung-skip-resume-sync";
   const resumeThresholdMs = 1500;
+  const workShiftTypes = ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst"];
   let autosaveTimer = null;
   let saveRequestId = 0;
   let latestAppliedRequestId = 0;
   let todaySyncInProgress = false;
+  let segmentState = Array.isArray(initialSegments) && initialSegments.length ? initialSegments : [{ start: {{ form_data.start_time | tojson }}, end: {{ form_data.end_time | tojson }} }];
 
   function getClientTodayParts() {
     const now = new Date();
@@ -289,6 +277,79 @@
     return `${sign}${hours}:${minutes}`;
   }
 
+  function normalizeSegment(segment = {}) {
+    return {
+      start: typeof segment.start === "string" ? segment.start : "",
+      end: typeof segment.end === "string" ? segment.end : "",
+    };
+  }
+
+  function getCurrentSegments() {
+    return segmentState.map((segment) => normalizeSegment(segment));
+  }
+
+  function ensureMinimumSegments() {
+    const isWorkShift = workShiftTypes.includes(shiftSelect.value);
+    if (!isWorkShift) {
+      segmentState = [];
+      return;
+    }
+    if (shiftSelect.value === "Notdienst") {
+      if (!segmentState.length) {
+        segmentState = [{ start: "", end: "" }];
+      }
+      return;
+    }
+    segmentState = [normalizeSegment(segmentState[0] || { start: defaults[shiftSelect.value].start, end: defaults[shiftSelect.value].end })];
+  }
+
+  function renderSegments() {
+    ensureMinimumSegments();
+    const isWorkShift = workShiftTypes.includes(shiftSelect.value);
+    const isNotdienst = shiftSelect.value === "Notdienst";
+    timeSegments.innerHTML = "";
+
+    if (!isWorkShift) {
+      timeSegments.innerHTML = `
+        <div class="time-grid disabled">
+          <label>
+            <span>Beginn</span>
+            <input type="text" value="" placeholder="06:45" disabled>
+          </label>
+          <label>
+            <span>Ende</span>
+            <input type="text" value="" placeholder="15:00" disabled>
+          </label>
+        </div>
+      `;
+      return;
+    }
+
+    getCurrentSegments().forEach((segment, index) => {
+      const row = document.createElement("div");
+      row.className = `segment-row ${index === 0 ? "primary" : "extra"}`;
+      row.innerHTML = `
+        <div class="time-grid">
+          <label>
+            <span>${isNotdienst ? `Beginn ${index + 1}` : "Beginn"}</span>
+            <input data-segment-start data-index="${index}" type="text" value="${segment.start}" placeholder="06:45">
+          </label>
+          <label>
+            <span>${isNotdienst ? `Ende ${index + 1}` : "Ende"}</span>
+            <input data-segment-end data-index="${index}" type="text" value="${segment.end}" placeholder="15:00">
+          </label>
+        </div>
+        <div class="stamp-actions">
+          <button class="button stamp-button" type="button" data-stamp="start" data-index="${index}">Arbeitsbeginn</button>
+          <button class="button stamp-button" type="button" data-stamp="end" data-index="${index}">Arbeitsende</button>
+        </div>
+        ${isNotdienst && index === 0 ? `<button class="button soft add-segment-inline" type="button" data-add-segment>Weitere Zeit hinzufuegen +</button>` : ""}
+        ${isNotdienst && index > 0 ? `<button class="button soft tiny remove-segment-button" type="button" data-remove-segment="${index}">Eintrag entfernen</button>` : ""}
+      `;
+      timeSegments.appendChild(row);
+    });
+  }
+
   function parseTime(value) {
     const match = /^(\d{2}):(\d{2})$/.exec(value.trim());
     if (!match) return null;
@@ -307,24 +368,35 @@
       return;
     }
 
-    const startMinutes = parseTime(startInput.value);
-    const endMinutes = parseTime(endInput.value);
+    const segments = getCurrentSegments();
     const target = current.target;
-    const workedMinutes = startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes
-      ? endMinutes - startMinutes
-      : 0;
-    const deductedBreak = workedMinutes > 360 ? current.break : 0;
     let actual = 0;
     let balance = 0;
+    let deductedBreak = 0;
 
-    if (startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes) {
-      actual = Math.max(workedMinutes - deductedBreak, 0);
+    if (key === "Notdienst") {
+      actual = segments.reduce((sum, segment) => {
+        const startMinutes = parseTime(segment.start);
+        const endMinutes = parseTime(segment.end);
+        if (startMinutes === null || endMinutes === null || endMinutes < startMinutes) return sum;
+        return sum + (endMinutes - startMinutes);
+      }, 0);
       balance = actual - target;
-    } else if (key === "Notdienst") {
-      actual = 0;
-      balance = 0;
     } else {
-      balance = -target;
+      const primary = segments[0] || { start: "", end: "" };
+      const startMinutes = parseTime(primary.start);
+      const endMinutes = parseTime(primary.end);
+      const workedMinutes = startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes
+        ? endMinutes - startMinutes
+        : 0;
+      deductedBreak = workedMinutes > 360 ? current.break : 0;
+
+      if (startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes) {
+        actual = Math.max(workedMinutes - deductedBreak, 0);
+        balance = actual - target;
+      } else {
+        balance = -target;
+      }
     }
 
     summaryTarget.textContent = formatMinutes(target);
@@ -335,10 +407,13 @@
   }
 
   function applySavedState(data) {
-    if (data.start_time !== undefined) startInput.value = data.start_time;
-    if (data.end_time !== undefined) endInput.value = data.end_time;
     if (data.shift_type !== undefined) shiftSelect.value = data.shift_type;
     if (data.notes !== undefined) notesInput.value = data.notes;
+    if (Array.isArray(data.segments)) {
+      segmentState = data.segments.map((segment) => normalizeSegment(segment));
+    } else if (data.start_time !== undefined || data.end_time !== undefined) {
+      segmentState = [{ start: data.start_time || "", end: data.end_time || "" }];
+    }
 
     summaryTarget.textContent = data.target;
     summaryActual.textContent = data.actual;
@@ -379,8 +454,9 @@
           day: form.elements.day.value,
           view: form.elements.view.value,
           shift_type: shiftSelect.value,
-          start_time: startInput.value,
-          end_time: endInput.value,
+          start_time: getCurrentSegments()[0]?.start || "",
+          end_time: getCurrentSegments()[0]?.end || "",
+          segments: getCurrentSegments(),
           notes: notesInput.value,
         }),
       });
@@ -410,20 +486,22 @@
   function applyShiftDefaults(force = false) {
     const key = shiftSelect.value;
     const current = defaults[key];
-    const isWorkShift = ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst"].includes(key);
-    startInput.disabled = !isWorkShift;
-    endInput.disabled = !isWorkShift;
-    startNowButton.disabled = !isWorkShift;
-    endNowButton.disabled = !isWorkShift;
+    const isWorkShift = workShiftTypes.includes(key);
     if (!isWorkShift) {
-      startInput.value = "";
-      endInput.value = "";
+      segmentState = [];
+      renderSegments();
       updateSummary();
       syncChips();
       return;
     }
-    if (force) startInput.value = current.start;
-    if (force) endInput.value = current.end;
+
+    if (force) {
+      segmentState = key === "Notdienst"
+        ? [{ start: "", end: "" }]
+        : [{ start: current.start, end: current.end }];
+    }
+
+    renderSegments();
     updateSummary();
     syncChips();
   }
@@ -447,25 +525,66 @@
     return `${hours}:${minutes}`;
   }
 
-  async function stampInto(target, field) {
+  async function stampInto(field, index) {
     const value = currentTime();
-    target.value = value;
+    if (!segmentState[index]) {
+      segmentState[index] = { start: "", end: "" };
+    }
+    segmentState[index][field] = value;
+    renderSegments();
     updateSummary();
     await saveForm({ immediate: true });
   }
 
-  startNowButton.addEventListener("click", () => stampInto(startInput, "start"));
-  endNowButton.addEventListener("click", () => stampInto(endInput, "end"));
-  startInput.addEventListener("input", () => {
+  timeSegments.addEventListener("click", (event) => {
+    const addButton = event.target.closest("[data-add-segment]");
+    if (addButton) {
+      segmentState.push({ start: "", end: "" });
+      renderSegments();
+      updateSummary();
+      saveForm({ immediate: true });
+      return;
+    }
+
+    const stampButton = event.target.closest("[data-stamp]");
+    if (stampButton) {
+      stampInto(stampButton.dataset.stamp, Number(stampButton.dataset.index));
+      return;
+    }
+
+    const removeButton = event.target.closest("[data-remove-segment]");
+    if (removeButton) {
+      segmentState.splice(Number(removeButton.dataset.removeSegment), 1);
+      renderSegments();
+      updateSummary();
+      saveForm({ immediate: true });
+    }
+  });
+
+  timeSegments.addEventListener("input", (event) => {
+    const startField = event.target.closest("[data-segment-start]");
+    const endField = event.target.closest("[data-segment-end]");
+    if (!startField && !endField) return;
+    const input = startField || endField;
+    const index = Number(input.dataset.index);
+    const field = startField ? "start" : "end";
+    if (!segmentState[index]) {
+      segmentState[index] = { start: "", end: "" };
+    }
+    segmentState[index][field] = input.value;
     updateSummary();
     saveForm();
   });
-  endInput.addEventListener("input", () => {
-    updateSummary();
-    saveForm();
-  });
-  startInput.addEventListener("blur", () => saveForm({ immediate: true }));
-  endInput.addEventListener("blur", () => saveForm({ immediate: true }));
+
+  timeSegments.addEventListener("blur", (event) => {
+    const input = event.target.closest("[data-segment-start], [data-segment-end]");
+    if (!input) return;
+    const index = Number(input.dataset.index);
+    const field = input.hasAttribute("data-segment-start") ? "start" : "end";
+    segmentState[index][field] = input.value;
+    saveForm({ immediate: true });
+  }, true);
+
   notesInput.addEventListener("input", () => saveForm());
   notesInput.addEventListener("blur", () => saveForm({ immediate: true }));
   form.addEventListener("submit", (event) => {
