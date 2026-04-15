@@ -863,27 +863,51 @@ def build_month_pdf(year: int, month: int):
     month_balance = 0
     highlighted_rows: list[tuple[int, str]] = []
     weekly_summary_rows: list[int] = []
+    weekly_header_rows: list[int] = []
+    weekly_spacer_rows: list[int] = []
     current_week_key: tuple[int, int] | None = None
     current_week_actual = 0
     current_week_balance = 0
 
+    def append_week_header(week_year: int, week_number: int, week_start: date) -> None:
+        week_end = min(week_start + timedelta(days=6), date(year, month, days_in_month))
+        data.append(
+            [
+                f"KW {week_number:02d}",
+                "",
+                "",
+                "",
+                "",
+                f"{week_start.strftime('%d.%m.')} - {week_end.strftime('%d.%m.%Y')}",
+            ]
+        )
+        weekly_header_rows.append(len(data) - 1)
+
+    def append_week_footer(week_number: int) -> None:
+        data.append(
+            [
+                f"KW {week_number:02d} gesamt",
+                "",
+                "",
+                format_minutes(current_week_actual),
+                format_minutes(current_week_balance),
+                "",
+            ]
+        )
+        weekly_summary_rows.append(len(data) - 1)
+        data.append(["", "", "", "", "", ""])
+        weekly_spacer_rows.append(len(data) - 1)
+
     for day_number in range(1, days_in_month + 1):
         current = date(year, month, day_number)
         week_key = (current.isocalendar().year, current.isocalendar().week)
-        if current_week_key is not None and week_key != current_week_key:
-            data.append(
-                [
-                    f"KW {current_week_key[1]:02d} gesamt",
-                    "",
-                    "",
-                    format_minutes(current_week_actual),
-                    format_minutes(current_week_balance),
-                    "",
-                ]
-            )
-            weekly_summary_rows.append(len(data) - 1)
+        if current_week_key is None:
+            append_week_header(week_key[0], week_key[1], current)
+        elif week_key != current_week_key:
+            append_week_footer(current_week_key[1])
             current_week_actual = 0
             current_week_balance = 0
+            append_week_header(week_key[0], week_key[1], current)
 
         entry = month_entries.get(current.isoformat())
         shift_type = entry["shift_type"] if entry else default_type_for(current)
@@ -927,17 +951,7 @@ def build_month_pdf(year: int, month: int):
                 highlighted_rows.append((len(data) - 1, shift_type))
 
     if current_week_key is not None:
-        data.append(
-            [
-                f"KW {current_week_key[1]:02d} gesamt",
-                "",
-                "",
-                format_minutes(current_week_actual),
-                format_minutes(current_week_balance),
-                "",
-            ]
-        )
-        weekly_summary_rows.append(len(data) - 1)
+        append_week_footer(current_week_key[1])
 
     data.append(["Monat gesamt", "", "", format_minutes(month_actual), format_minutes(month_balance), ""])
 
@@ -979,12 +993,37 @@ def build_month_pdf(year: int, month: int):
     }
     for row_index, shift_type in highlighted_rows:
         table_style_commands.append(("BACKGROUND", (0, row_index), (-1, row_index), highlight_colors[shift_type]))
+    for row_index in weekly_header_rows:
+        table_style_commands.extend(
+            [
+                ("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#DCEBFF")),
+                ("TEXTCOLOR", (0, row_index), (-1, row_index), colors.HexColor("#16325C")),
+                ("FONTNAME", (0, row_index), (-1, row_index), "Helvetica-Bold"),
+                ("LINEABOVE", (0, row_index), (-1, row_index), 0.65, colors.HexColor("#A7C2E4")),
+                ("BOTTOMPADDING", (0, row_index), (-1, row_index), 8),
+                ("TOPPADDING", (0, row_index), (-1, row_index), 8),
+                ("SPAN", (0, row_index), (4, row_index)),
+                ("ALIGN", (5, row_index), (5, row_index), "RIGHT"),
+            ]
+        )
     for row_index in weekly_summary_rows:
         table_style_commands.extend(
             [
                 ("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#EEF4FF")),
                 ("FONTNAME", (0, row_index), (-1, row_index), "Helvetica-Bold"),
                 ("LINEABOVE", (0, row_index), (-1, row_index), 0.45, colors.HexColor("#B8CBE3")),
+                ("BOTTOMPADDING", (0, row_index), (-1, row_index), 8),
+                ("TOPPADDING", (0, row_index), (-1, row_index), 8),
+            ]
+        )
+    for row_index in weekly_spacer_rows:
+        table_style_commands.extend(
+            [
+                ("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#FFFFFF")),
+                ("LINEABOVE", (0, row_index), (-1, row_index), 0, colors.white),
+                ("LINEBELOW", (0, row_index), (-1, row_index), 0, colors.white),
+                ("TOPPADDING", (0, row_index), (-1, row_index), 5),
+                ("BOTTOMPADDING", (0, row_index), (-1, row_index), 5),
             ]
         )
 
