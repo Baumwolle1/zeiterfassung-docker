@@ -696,7 +696,7 @@ def calculate_ranges(selected_date: date, month_entries: dict[str, dict], select
     week_actual = 0
     cursor = week_start
     while cursor <= week_end:
-        totals = totals_for_day(cursor, month_entries, selected_date, selected_form)
+        totals = totals_for_aggregate_day(cursor, month_entries, selected_date, selected_form)
         week_target += totals.target
         week_actual += totals.actual
         cursor += timedelta(days=1)
@@ -706,7 +706,7 @@ def calculate_ranges(selected_date: date, month_entries: dict[str, dict], select
     month_actual = 0
     for day_number in range(1, days_in_month + 1):
         current = date(selected_date.year, selected_date.month, day_number)
-        totals = totals_for_day(current, month_entries, selected_date, selected_form)
+        totals = totals_for_aggregate_day(current, month_entries, selected_date, selected_form)
         month_target += totals.target
         month_actual += totals.actual
     return week_target, week_actual, month_target, month_actual
@@ -759,7 +759,7 @@ def build_week_summaries(year: int, month: int, month_entries: dict[str, dict], 
                 "actual": 0,
             }
 
-        totals = totals_for_day(current, month_entries, selected_date, selected_form)
+        totals = totals_for_aggregate_day(current, month_entries, selected_date, selected_form)
         current_summary["end"] = current
         current_summary["target"] += totals.target
         current_summary["actual"] += totals.actual
@@ -798,6 +798,25 @@ def totals_for_day(day_value: date, month_entries: dict[str, dict], selected_dat
         (entry["end_time"] if entry else "") or "",
         (entry["segments"] if entry else []) or [],
     )
+
+
+def totals_for_aggregate_day(day_value: date, month_entries: dict[str, dict], selected_date: date, selected_form: dict) -> Totals:
+    if day_value == selected_date:
+        shift_type = selected_form["shift_type"]
+        totals = calculate_totals(shift_type, selected_form["start_time"], selected_form["end_time"], selected_form["segments"])
+    else:
+        entry = month_entries.get(day_value.isoformat())
+        shift_type = entry["shift_type"] if entry else default_type_for(day_value)
+        totals = calculate_totals(
+            shift_type,
+            (entry["start_time"] if entry else "") or "",
+            (entry["end_time"] if entry else "") or "",
+            (entry["segments"] if entry else []) or [],
+        )
+
+    if shift_type == "Notdienst" and day_value.weekday() >= 5:
+        return Totals(target=totals.target, actual=0, balance=0, deducted_break=0)
+    return totals
 
 
 def format_minutes(value: int) -> str:
@@ -907,10 +926,11 @@ def build_month_pdf(year: int, month: int):
             (entry["end_time"] if entry else "") or "",
             segments,
         )
+        aggregate_balance = 0 if shift_type == "Notdienst" and current.weekday() >= 5 else totals.balance
         month_actual += totals.actual
-        month_balance += totals.balance
+        month_balance += aggregate_balance
         current_week_actual += totals.actual
-        current_week_balance += totals.balance
+        current_week_balance += aggregate_balance
         current_week_key = week_key
         day_segments = segments if shift_type == "Notdienst" and segments else [{"start": (entry["start_time"] if entry else "") or "-", "end": (entry["end_time"] if entry else "") or "-"}]
         notes_value = (entry["notes"] if entry else "") or "-"
