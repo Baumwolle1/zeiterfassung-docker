@@ -409,9 +409,14 @@ def create_app() -> Flask:
                 continue
             if current.weekday() == 4:
                 notes = existing_entry["notes"] if existing_entry else ""
-                start_time = (existing_entry["start_time"] if existing_entry else "") or SHIFT_CONFIG["Freitag"]["start"]
-                end_time = (existing_entry["end_time"] if existing_entry else "") or SHIFT_CONFIG["Freitag"]["end"]
-                save_entry(current, "Freitag", start_time, end_time, notes, existing_entry["segments"] if existing_entry else None)
+                save_entry(
+                    current,
+                    "Freitag",
+                    SHIFT_CONFIG["Freitag"]["start"],
+                    SHIFT_CONFIG["Freitag"]["end"],
+                    notes,
+                    None,
+                )
                 continue
             if current.weekday() >= 5:
                 notes = existing_entry["notes"] if existing_entry else ""
@@ -419,9 +424,14 @@ def create_app() -> Flask:
                 continue
             defaults = SHIFT_CONFIG[template_type]
             notes = existing_entry["notes"] if existing_entry else ""
-            start_time = (existing_entry["start_time"] if existing_entry else "") or defaults["start"]
-            end_time = (existing_entry["end_time"] if existing_entry else "") or defaults["end"]
-            save_entry(current, template_type, start_time, end_time, notes, existing_entry["segments"] if existing_entry else None)
+            save_entry(
+                current,
+                template_type,
+                defaults["start"],
+                defaults["end"],
+                notes,
+                None,
+            )
 
         return redirect(url_for("index", year=year, month=month, day=day, view="week"))
 
