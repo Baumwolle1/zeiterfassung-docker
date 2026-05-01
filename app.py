@@ -13,6 +13,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas
 from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
@@ -54,6 +55,14 @@ TIME_ENTRY_TYPES = WORK_TYPES + ("Arztkrank",)
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ["DATA_DIR"]) if os.environ.get("DATA_DIR") else BASE_DIR / "data"
 DB_PATH = DATA_DIR / "zeiterfassung.db"
+STATIC_DIR = BASE_DIR / "static"
+PDF_TEMPLATE_IMAGE_PATH = STATIC_DIR / "pdf" / "elli_stundenzettel_template.jpg"
+PDF_TEMPLATE_PAGE_SIZE = (611, 841)
+PDF_TEMPLATE_SOURCE_SIZE = (5088, 7008)
+PDF_TEMPLATE_COLUMN_LINES = [284, 845, 1298, 1755, 2213, 2670, 3128, 3596, 4038, 4805]
+PDF_TEMPLATE_DAY_ROW_LINES = [1477, 1602, 1724, 1857, 1979, 2105, 2235, 2361, 2486, 2617, 2738, 2867, 2997, 3123, 3251, 3379, 3500, 3628, 3756, 3885, 4008, 4134, 4258, 4391, 4510, 4633, 4761, 4890, 5016, 5145, 5272, 5399]
+PDF_TEMPLATE_SUMMARY_ROW_LINES = [5980, 6188, 6414, 6653]
+EMPLOYEE_NAME = "Elisabeth"
 
 
 @dataclass
@@ -921,7 +930,286 @@ def shift_month(base: date, delta: int) -> date:
     return date(year, month, day)
 
 
-def build_month_pdf(year: int, month: int):
+def format_signed_minutes(value: int) -> str:
+    if value > 0:
+        return f"+{format_minutes(value)}"
+    return format_minutes(value)
+
+
+def minutes_to_time_text(value: int) -> str:
+    return f"{value // 60:02d}:{value % 60:02d}"
+
+
+def template_point_x(pixel_x: float) -> float:
+    return pixel_x * PDF_TEMPLATE_PAGE_SIZE[0] / PDF_TEMPLATE_SOURCE_SIZE[0]
+
+
+def template_point_y(pixel_y: float) -> float:
+    return PDF_TEMPLATE_PAGE_SIZE[1] - (pixel_y * PDF_TEMPLATE_PAGE_SIZE[1] / PDF_TEMPLATE_SOURCE_SIZE[1])
+
+
+def template_baseline(top_y: float, bottom_y: float, font_size: float) -> float:
+    return template_point_y((top_y + bottom_y) / 2) - (font_size * 0.32)
+
+
+def export_shift_label(shift_type: str) -> str:
+    labels = {
+        "Fruehschicht": "Fruehschicht",
+        "Spaetschicht": "Spaetschicht",
+        "Freitag": "Freitag",
+        "Notdienst": "Notdienst",
+        "Urlaub": "Urlaub",
+        "Krank": "Krank",
+        "Arztkrank": "Arztkrank",
+        "Feiertag": "Feiertag",
+        "Frei": "Frei",
+    }
+    return labels.get(shift_type, shift_type)
+
+
+def segment_duration(start_time: str, end_time: str) -> int | None:
+    start_minutes = parse_time(start_time)
+    end_minutes = parse_time(end_time)
+    if start_minutes is None or end_minutes is None or end_minutes < start_minutes:
+        return None
+    return end_minutes - start_minutes
+
+
+def valid_segment(start_time: str, end_time: str) -> dict | None:
+    duration = segment_duration(start_time, end_time)
+    if duration is None:
+        return None
+    return {"start": start_time, "end": end_time, "minutes": duration}
+
+
+def template_segments_for_entry(shift_type: str, start_time: str, end_time: str, segments: list[dict[str, str]] | None) -> tuple[dict | None, dict | None, int, list[str]]:
+    if shift_type == "Notdienst":
+        valid_segments = []
+        for segment in normalize_segments(segments or []):
+            resolved = valid_segment(segment["start"], segment["end"])
+            if resolved:
+                valid_segments.append(resolved)
+        if not valid_segments and start_time and end_time:
+            fallback_segment = valid_segment(start_time, end_time)
+            if fallback_segment:
+                valid_segments.append(fallback_segment)
+
+        total_minutes = sum(segment["minutes"] for segment in valid_segments)
+        extra_segments: list[str] = []
+        if len(valid_segments) >= 2:
+            morning = valid_segments[0]
+            afternoon = valid_segments[1]
+            extra_segments = [f"{segment['start']}-{segment['end']}" for segment in valid_segments[2:]]
+            return morning, afternoon, total_minutes, extra_segments
+        if len(valid_segments) == 1:
+            only_segment = valid_segments[0]
+            if parse_time(only_segment["start"]) is not None and parse_time(only_segment["start"]) >= 12 * 60:
+                return None, only_segment, total_minutes, extra_segments
+            return only_segment, None, total_minutes, extra_segments
+        return None, None, 0, extra_segments
+
+    primary_segment = valid_segment(start_time, end_time)
+    if not primary_segment:
+        resolved_segments = normalize_segments(segments or [])
+        if resolved_segments:
+            primary_segment = valid_segment(resolved_segments[0]["start"], resolved_segments[0]["end"])
+    if not primary_segment:
+        return None, None, 0, []
+
+    start_minutes = parse_time(primary_segment["start"])
+    end_minutes = parse_time(primary_segment["end"])
+    if start_minutes is None or end_minutes is None:
+        return None, None, 0, []
+
+    worked_minutes = end_minutes - start_minutes
+    break_minutes = SHIFT_CONFIG.get(shift_type, {}).get("break", 0)
+    if worked_minutes <= 360:
+        break_minutes = 0
+
+    midday = 12 * 60
+    if break_minutes:
+        if start_minutes < midday < end_minutes:
+            break_start = midday
+        else:
+            break_start = min(max(start_minutes + 240, start_minutes), end_minutes)
+        morning_end = min(break_start, end_minutes)
+        afternoon_start = min(break_start + break_minutes, end_minutes)
+    elif start_minutes < midday < end_minutes:
+        morning_minutes = midday - start_minutes
+        afternoon_minutes = end_minutes - midday
+        if min(morning_minutes, afternoon_minutes) < 15:
+            if morning_minutes >= afternoon_minutes:
+                morning_end = end_minutes
+                afternoon_start = end_minutes
+            else:
+                morning_end = start_minutes
+                afternoon_start = start_minutes
+        else:
+            morning_end = midday
+            afternoon_start = midday
+    else:
+        morning_end = end_minutes if end_minutes <= midday else start_minutes
+        afternoon_start = start_minutes if start_minutes >= midday else end_minutes
+
+    morning = None
+    afternoon = None
+    if morning_end > start_minutes:
+        morning = valid_segment(minutes_to_time_text(start_minutes), minutes_to_time_text(morning_end))
+    if end_minutes > afternoon_start:
+        afternoon = valid_segment(minutes_to_time_text(afternoon_start), minutes_to_time_text(end_minutes))
+
+    if morning is None and afternoon is None:
+        if end_minutes <= midday:
+            morning = primary_segment
+        else:
+            afternoon = primary_segment
+
+    total_minutes = (morning["minutes"] if morning else 0) + (afternoon["minutes"] if afternoon else 0)
+    return morning, afternoon, total_minutes, []
+
+
+def combine_remarks(*parts: str) -> str:
+    cleaned = [part.strip() for part in parts if part and part.strip()]
+    return " | ".join(cleaned)
+
+
+def fit_text(canvas_obj: canvas.Canvas, text: str, max_width: float, font_name: str, font_size: float, minimum_size: float = 5.2) -> tuple[str, float]:
+    trimmed = text.strip()
+    size = font_size
+    while trimmed and canvas_obj.stringWidth(trimmed, font_name, size) > max_width and size > minimum_size:
+        size -= 0.2
+    while trimmed and canvas_obj.stringWidth(trimmed, font_name, size) > max_width and len(trimmed) > 3:
+        trimmed = trimmed[:-1].rstrip()
+    if trimmed != text.strip() and len(trimmed) >= 3:
+        trimmed = trimmed[:-3].rstrip() + "..."
+    return trimmed, size
+
+
+def aggregate_totals_for_entry(day_value: date, shift_type: str, start_time: str, end_time: str, segments: list[dict[str, str]] | None = None) -> Totals:
+    totals = calculate_totals(shift_type, start_time, end_time, segments)
+    if shift_type == "Notdienst" and day_value.weekday() >= 5:
+        return Totals(target=totals.target, actual=0, balance=0, deducted_break=0)
+    return totals
+
+
+def month_balance_from_entries(year: int, month: int, month_entries: dict[str, dict]) -> int:
+    _, days_in_month = calendar.monthrange(year, month)
+    balance_total = 0
+    for day_number in range(1, days_in_month + 1):
+        current = date(year, month, day_number)
+        entry = month_entries.get(current.isoformat())
+        shift_type = entry["shift_type"] if entry else default_type_for(current)
+        balance_total += aggregate_totals_for_entry(
+            current,
+            shift_type,
+            (entry["start_time"] if entry else "") or "",
+            (entry["end_time"] if entry else "") or "",
+            (entry["segments"] if entry else []) or [],
+        ).balance
+    return balance_total
+
+
+def build_template_month_pdf(year: int, month: int):
+    month_entries = fetch_month_entries(year, month)
+    _, days_in_month = calendar.monthrange(year, month)
+    previous_month_date = shift_month(date(year, month, 15), -1)
+    previous_month_entries = fetch_month_entries(previous_month_date.year, previous_month_date.month)
+    month_balance = month_balance_from_entries(year, month, month_entries)
+    previous_balance = month_balance_from_entries(previous_month_date.year, previous_month_date.month, previous_month_entries)
+    running_balance = previous_balance + month_balance
+
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=PDF_TEMPLATE_PAGE_SIZE)
+    pdf.drawImage(str(PDF_TEMPLATE_IMAGE_PATH), 0, 0, width=PDF_TEMPLATE_PAGE_SIZE[0], height=PDF_TEMPLATE_PAGE_SIZE[1], preserveAspectRatio=False, mask="auto")
+
+    pdf.setFillColorRGB(0, 0, 0)
+    pdf.setFont("Helvetica", 12)
+    pdf.drawString(template_point_x(980), template_point_y(610), EMPLOYEE_NAME)
+    pdf.drawString(template_point_x(3900), template_point_y(610), f"{MONTH_NAMES[month - 1]} {year}")
+
+    row_font_size = 7.2
+    notes_font_size = 6.6
+    cell_centers = [
+        (PDF_TEMPLATE_COLUMN_LINES[1] + PDF_TEMPLATE_COLUMN_LINES[2]) / 2,
+        (PDF_TEMPLATE_COLUMN_LINES[2] + PDF_TEMPLATE_COLUMN_LINES[3]) / 2,
+        (PDF_TEMPLATE_COLUMN_LINES[3] + PDF_TEMPLATE_COLUMN_LINES[4]) / 2,
+        (PDF_TEMPLATE_COLUMN_LINES[4] + PDF_TEMPLATE_COLUMN_LINES[5]) / 2,
+        (PDF_TEMPLATE_COLUMN_LINES[5] + PDF_TEMPLATE_COLUMN_LINES[6]) / 2,
+        (PDF_TEMPLATE_COLUMN_LINES[6] + PDF_TEMPLATE_COLUMN_LINES[7]) / 2,
+        (PDF_TEMPLATE_COLUMN_LINES[7] + PDF_TEMPLATE_COLUMN_LINES[8]) / 2,
+    ]
+    notes_left = template_point_x(PDF_TEMPLATE_COLUMN_LINES[8] + 16)
+    notes_width = template_point_x(PDF_TEMPLATE_COLUMN_LINES[9] - PDF_TEMPLATE_COLUMN_LINES[8] - 28)
+
+    for day_number in range(1, 32):
+        top_line = PDF_TEMPLATE_DAY_ROW_LINES[day_number - 1]
+        bottom_line = PDF_TEMPLATE_DAY_ROW_LINES[day_number]
+        baseline = template_baseline(top_line, bottom_line, row_font_size)
+        notes_baseline = template_baseline(top_line, bottom_line, notes_font_size)
+
+        if day_number > days_in_month:
+            continue
+
+        current = date(year, month, day_number)
+        entry = month_entries.get(current.isoformat())
+        shift_type = entry["shift_type"] if entry else default_type_for(current)
+        start_time = (entry["start_time"] if entry else "") or ""
+        end_time = (entry["end_time"] if entry else "") or ""
+        segments = (entry["segments"] if entry else []) or []
+        notes = (entry["notes"] if entry else "") or ""
+
+        morning, afternoon, display_total_minutes, extra_segments = template_segments_for_entry(shift_type, start_time, end_time, segments)
+        total_text = format_minutes(display_total_minutes) if display_total_minutes else ""
+        if shift_type in {"Urlaub", "Krank", "Feiertag", "Frei"} and not morning and not afternoon:
+            total_text = ""
+
+        remarks = combine_remarks(
+            export_shift_label(shift_type) if shift_type in {"Notdienst", "Urlaub", "Krank", "Arztkrank", "Feiertag"} else "",
+            f"Weitere Zeiten: {', '.join(extra_segments)}" if extra_segments else "",
+            notes,
+        )
+
+        values = [
+            morning["start"] if morning else "",
+            morning["end"] if morning else "",
+            format_minutes(morning["minutes"]) if morning else "",
+            afternoon["start"] if afternoon else "",
+            afternoon["end"] if afternoon else "",
+            format_minutes(afternoon["minutes"]) if afternoon else "",
+            total_text,
+        ]
+
+        pdf.setFont("Helvetica", row_font_size)
+        for center_x, value in zip(cell_centers, values):
+            if value:
+                pdf.drawCentredString(template_point_x(center_x), baseline, value)
+
+        if remarks:
+            fitted_remark, fitted_size = fit_text(pdf, remarks, notes_width, "Helvetica", notes_font_size)
+            pdf.setFont("Helvetica", fitted_size)
+            pdf.drawString(notes_left, notes_baseline, fitted_remark)
+
+    summary_x = template_point_x((4038 + 4805) / 2)
+    summary_font_size = 10.2
+    summary_rows = [
+        format_signed_minutes(month_balance),
+        format_signed_minutes(previous_balance),
+        format_signed_minutes(running_balance),
+    ]
+    pdf.setFont("Helvetica-Bold", summary_font_size)
+    for index, value in enumerate(summary_rows):
+        top_line = PDF_TEMPLATE_SUMMARY_ROW_LINES[index]
+        bottom_line = PDF_TEMPLATE_SUMMARY_ROW_LINES[index + 1]
+        summary_baseline = template_baseline(top_line, bottom_line, summary_font_size)
+        pdf.drawCentredString(summary_x, summary_baseline, value)
+
+    pdf.showPage()
+    pdf.save()
+    buffer.seek(0)
+    return buffer
+
+
+def build_legacy_month_pdf(year: int, month: int):
     month_entries = fetch_month_entries(year, month)
     _, days_in_month = calendar.monthrange(year, month)
     month_actual = 0
@@ -1113,6 +1401,12 @@ def build_month_pdf(year: int, month: int):
     document.build(story)
     buffer.seek(0)
     return buffer
+
+
+def build_month_pdf(year: int, month: int):
+    if PDF_TEMPLATE_IMAGE_PATH.exists():
+        return build_template_month_pdf(year, month)
+    return build_legacy_month_pdf(year, month)
 
 
 app = create_app()
