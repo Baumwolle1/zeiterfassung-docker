@@ -713,6 +713,9 @@ def calculate_ranges(selected_date: date, month_entries: dict[str, dict], select
     week_actual = 0
     cursor = week_start
     while cursor <= week_end:
+        if cursor.month != selected_date.month or cursor.year != selected_date.year:
+            cursor += timedelta(days=1)
+            continue
         totals = totals_for_aggregate_day(cursor, month_entries, selected_date, selected_form)
         week_target += totals.target
         week_actual += totals.actual
