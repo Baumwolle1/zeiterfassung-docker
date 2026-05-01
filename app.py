@@ -237,7 +237,9 @@ def create_app() -> Flask:
             form_data["segments"],
         )
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, form_data)
+        week_balance_total = week_actual - week_target
         month_progress = calculate_month_progress(year, month, month_entries, selected_date, form_data, today)
+        month_balance_total = calculate_month_balance(year, month, month_entries, selected_date, form_data, today)
         week_summaries = build_week_summaries(year, month, month_entries, selected_date, form_data)
         vacation_taken, sick_days = count_special_days(year)
         visible_days = [
@@ -259,12 +261,13 @@ def create_app() -> Flask:
             today=today,
             week_target=format_minutes(week_target),
             week_actual=format_minutes(week_actual),
-            week_balance=format_minutes(week_actual - week_target),
+            week_balance=format_minutes(week_balance_total),
+            week_balance_class=balance_class(week_balance_total),
             month_target=format_minutes(month_target),
             month_actual=format_minutes(month_actual),
             month_progress=format_minutes(month_progress),
-            month_balance=format_minutes(month_actual - month_target),
-            month_balance_class=balance_class(month_actual - month_target),
+            month_balance=format_minutes(month_balance_total),
+            month_balance_class=balance_class(month_balance_total),
             week_summaries=serialize_week_summaries(week_summaries),
             vacation_total=YEAR_VACATION_DAYS,
             vacation_taken=vacation_taken,
@@ -345,8 +348,10 @@ def create_app() -> Flask:
         totals = calculate_totals(entry["shift_type"], entry["start_time"], entry["end_time"], entry["segments"])
         month_entries = fetch_month_entries(year, month)
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, entry)
+        week_balance_total = week_actual - week_target
         today = client_today_from_request() or date.today()
         month_progress = calculate_month_progress(year, month, month_entries, selected_date, entry, today)
+        month_balance_total = calculate_month_balance(year, month, month_entries, selected_date, entry, today)
         week_summaries = build_week_summaries(year, month, month_entries, selected_date, entry)
         vacation_taken, sick_days = count_special_days(year)
         return jsonify(
@@ -362,12 +367,13 @@ def create_app() -> Flask:
                 "balance": format_minutes(totals.balance),
                 "break": format_minutes(totals.deducted_break),
                 "balance_class": balance_class(totals.balance),
-                "week_balance": format_minutes(week_actual - week_target),
+                "week_balance": format_minutes(week_balance_total),
+                "week_balance_class": balance_class(week_balance_total),
                 "month_progress": format_minutes(month_progress),
                 "month_target": format_minutes(month_target),
                 "month_actual": format_minutes(month_actual),
-                "month_balance": format_minutes(month_actual - month_target),
-                "month_balance_class": balance_class(month_actual - month_target),
+                "month_balance": format_minutes(month_balance_total),
+                "month_balance_class": balance_class(month_balance_total),
                 "week_summaries": serialize_week_summaries(week_summaries),
                 "vacation_taken": vacation_taken,
                 "vacation_remaining": max(YEAR_VACATION_DAYS - vacation_taken, 0),
@@ -738,6 +744,33 @@ def calculate_month_progress(
         progress += totals.actual
         current += timedelta(days=1)
     return progress
+
+
+def calculate_month_balance(
+    year: int,
+    month: int,
+    month_entries: dict[str, dict],
+    selected_date: date,
+    selected_form: dict,
+    today: date,
+) -> int:
+    month_start = date(year, month, 1)
+    _, days_in_month = calendar.monthrange(year, month)
+    month_end = date(year, month, days_in_month)
+
+    if (year, month) > (today.year, today.month):
+        return 0
+
+    cutoff = today if (year, month) == (today.year, today.month) else month_end
+    cutoff = min(cutoff, month_end)
+
+    balance_total = 0
+    current = month_start
+    while current <= cutoff:
+        totals = totals_for_aggregate_day(current, month_entries, selected_date, selected_form)
+        balance_total += totals.balance
+        current += timedelta(days=1)
+    return balance_total
 
 
 def build_week_summaries(year: int, month: int, month_entries: dict[str, dict], selected_date: date, selected_form: dict) -> list[dict]:

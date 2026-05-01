@@ -50,7 +50,7 @@
           </div>
           <div>
             <span>Woche</span>
-            <strong id="summary-week">{{ week_balance }}</strong>
+            <strong id="summary-week" class="{{ week_balance_class }}">{{ week_balance }}</strong>
           </div>
           <div>
             <span>Monat Ist</span>
@@ -148,7 +148,7 @@
     </article>
     <article class="summary-card glass">
       <span>Aktuelle KW</span>
-      <strong id="summary-week-bottom">{{ week_balance }}</strong>
+      <strong id="summary-week-bottom" class="{{ week_balance_class }}">{{ week_balance }}</strong>
     </article>
     <article class="summary-card glass">
       <span>Monat gesamt</span>
@@ -481,8 +481,10 @@
     summaryBalance.className = data.balance_class;
     summaryBreak.textContent = data.break;
     summaryWeek.textContent = data.week_balance;
+    summaryWeek.className = data.week_balance_class;
     summaryMonth.textContent = data.month_progress;
     summaryWeekBottom.textContent = data.week_balance;
+    summaryWeekBottom.className = data.week_balance_class;
     summaryMonthBottom.textContent = data.month_progress;
     summaryMonthBalanceBottom.textContent = data.month_balance;
     summaryMonthBalanceBottom.className = data.month_balance_class;
