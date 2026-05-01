@@ -50,6 +50,7 @@ SHIFT_CONFIG = {
     "Frei": {"label": "Frei", "target": 0, "break": 0, "start": "", "end": ""},
 }
 WORK_TYPES = ("Fruehschicht", "Spaetschicht", "Freitag", "Notdienst")
+TIME_ENTRY_TYPES = WORK_TYPES + ("Arztkrank",)
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ["DATA_DIR"]) if os.environ.get("DATA_DIR") else BASE_DIR / "data"
 DB_PATH = DATA_DIR / "zeiterfassung.db"
@@ -64,7 +65,7 @@ class Totals:
 
 
 def default_segments_for_shift(shift_type: str, start_time: str = "", end_time: str = "") -> list[dict[str, str]]:
-    if shift_type not in WORK_TYPES:
+    if shift_type not in TIME_ENTRY_TYPES:
         return []
     start_value = start_time or SHIFT_CONFIG[shift_type]["start"]
     end_value = end_time or SHIFT_CONFIG[shift_type]["end"]
@@ -105,7 +106,7 @@ def segments_for_entry(shift_type: str, start_time: str, end_time: str, segments
 def entry_payload(shift_type: str, start_time: str, end_time: str, notes: str, segments: list[dict[str, str]] | None = None) -> dict:
     resolved_segments = normalize_segments(segments if segments is not None else default_segments_for_shift(shift_type, start_time, end_time))
     primary = resolved_segments[0] if resolved_segments else {"start": "", "end": ""}
-    if shift_type not in WORK_TYPES:
+    if shift_type not in TIME_ENTRY_TYPES:
         primary = {"start": "", "end": ""}
         resolved_segments = []
     return {
@@ -301,7 +302,7 @@ def create_app() -> Flask:
         if shift_type not in SHIFT_CONFIG:
             shift_type = default_type_for(selected_date)
 
-        if shift_type not in WORK_TYPES:
+        if shift_type not in TIME_ENTRY_TYPES:
             start_time = ""
             end_time = ""
             segments = []
@@ -332,7 +333,7 @@ def create_app() -> Flask:
         if shift_type not in SHIFT_CONFIG:
             shift_type = default_type_for(selected_date)
 
-        if shift_type not in WORK_TYPES:
+        if shift_type not in TIME_ENTRY_TYPES:
             start_time = ""
             end_time = ""
             segments = []
@@ -457,9 +458,9 @@ def create_app() -> Flask:
         else:
             return jsonify({"ok": False}), 400
 
-        if shift_type not in WORK_TYPES:
+        if shift_type not in TIME_ENTRY_TYPES:
             shift_type = default_type_for(selected_date)
-            if shift_type not in WORK_TYPES:
+            if shift_type not in TIME_ENTRY_TYPES:
                 shift_type = "Fruehschicht"
             if not start_time:
                 start_time = SHIFT_CONFIG[shift_type]["start"]

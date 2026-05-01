@@ -155,6 +155,10 @@
       <strong id="summary-month-bottom">{{ month_progress }}</strong>
     </article>
     <article class="summary-card glass">
+      <span>Monat Ueberstunden</span>
+      <strong id="summary-month-balance-bottom" class="{{ month_balance_class }}">{{ month_balance }}</strong>
+    </article>
+    <article class="summary-card glass">
       <span>Urlaub genommen</span>
       <strong id="summary-vacation-used">{{ vacation_taken }} / {{ vacation_total }}</strong>
     </article>
@@ -196,7 +200,7 @@
   </section>
 
   <footer class="version-footer">
-    <span>Version 1.0</span>
+    <span>Version 1.1</span>
   </footer>
 </main>
 
@@ -215,6 +219,7 @@
   const summaryMonth = document.getElementById("summary-month");
   const summaryWeekBottom = document.getElementById("summary-week-bottom");
   const summaryMonthBottom = document.getElementById("summary-month-bottom");
+  const summaryMonthBalanceBottom = document.getElementById("summary-month-balance-bottom");
   const summaryVacationUsed = document.getElementById("summary-vacation-used");
   const summaryVacationLeft = document.getElementById("summary-vacation-left");
   const summarySickDays = document.getElementById("summary-sick-days");
@@ -227,7 +232,7 @@
   const hiddenAtKey = "zeiterfassung-hidden-at";
   const skipResumeKey = "zeiterfassung-skip-resume-sync";
   const resumeThresholdMs = 1500;
-  const workShiftTypes = ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst"];
+  const timeEntryTypes = ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst", "Arztkrank"];
   let autosaveTimer = null;
   let saveRequestId = 0;
   let latestAppliedRequestId = 0;
@@ -324,8 +329,8 @@
   }
 
   function ensureMinimumSegments() {
-    const isWorkShift = workShiftTypes.includes(shiftSelect.value);
-    if (!isWorkShift) {
+    const supportsTimeEntry = timeEntryTypes.includes(shiftSelect.value);
+    if (!supportsTimeEntry) {
       segmentState = [];
       return;
     }
@@ -340,7 +345,7 @@
 
   function renderSegments() {
     ensureMinimumSegments();
-    const isWorkShift = workShiftTypes.includes(shiftSelect.value);
+    const isWorkShift = timeEntryTypes.includes(shiftSelect.value);
     const isNotdienst = shiftSelect.value === "Notdienst";
     timeSegments.innerHTML = "";
 
@@ -479,6 +484,8 @@
     summaryMonth.textContent = data.month_progress;
     summaryWeekBottom.textContent = data.week_balance;
     summaryMonthBottom.textContent = data.month_progress;
+    summaryMonthBalanceBottom.textContent = data.month_balance;
+    summaryMonthBalanceBottom.className = data.month_balance_class;
     summaryVacationUsed.textContent = `${data.vacation_taken} / ${vacationTotal}`;
     summaryVacationLeft.textContent = data.vacation_remaining;
     summarySickDays.textContent = data.sick_days;
@@ -545,7 +552,7 @@
   function applyShiftDefaults(force = false) {
     const key = shiftSelect.value;
     const current = defaults[key];
-    const isWorkShift = workShiftTypes.includes(key);
+    const isWorkShift = timeEntryTypes.includes(key);
     if (!isWorkShift) {
       segmentState = [];
       renderSegments();
