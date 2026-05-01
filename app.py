@@ -40,7 +40,7 @@ WEEKDAY_SHORT = ["MO", "DI", "MI", "DO", "FR", "SA", "SO"]
 
 SHIFT_CONFIG = {
     "Fruehschicht": {"label": "Frühschicht", "target": 465, "break": 30, "start": "06:45", "end": "15:00"},
-    "Spaetschicht": {"label": "Spätschicht", "target": 420, "break": 0, "start": "12:00", "end": "19:00"},
+    "Spaetschicht": {"label": "Spätschicht", "target": 420, "break": 0, "start": "11:55", "end": "19:00"},
     "Freitag": {"label": "Freitag", "target": 375, "break": 0, "start": "06:45", "end": "13:00"},
     "Notdienst": {"label": "Notdienst", "target": 0, "break": 0, "start": "", "end": ""},
     "Urlaub": {"label": "Urlaub", "target": 0, "break": 0, "start": "", "end": ""},
