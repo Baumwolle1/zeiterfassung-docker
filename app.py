@@ -982,6 +982,10 @@ def valid_segment(start_time: str, end_time: str) -> dict | None:
     return {"start": start_time, "end": end_time, "minutes": duration}
 
 
+def segment_with_minutes(start_time: str, end_time: str, minutes: int) -> dict:
+    return {"start": start_time, "end": end_time, "minutes": max(minutes, 0)}
+
+
 def template_segments_for_entry(shift_type: str, start_time: str, end_time: str, segments: list[dict[str, str]] | None) -> tuple[dict | None, dict | None, int, list[str]]:
     if shift_type == "Notdienst":
         valid_segments = []
@@ -1016,56 +1020,20 @@ def template_segments_for_entry(shift_type: str, start_time: str, end_time: str,
     if not primary_segment:
         return None, None, 0, []
 
+    if shift_type in {"Fruehschicht", "Freitag"}:
+        totals = calculate_totals(shift_type, start_time, end_time, segments)
+        morning = segment_with_minutes(primary_segment["start"], primary_segment["end"], totals.actual)
+        return morning, None, totals.actual, []
+
+    if shift_type == "Spaetschicht":
+        totals = calculate_totals(shift_type, start_time, end_time, segments)
+        afternoon = segment_with_minutes(primary_segment["start"], primary_segment["end"], totals.actual)
+        return None, afternoon, totals.actual, []
+
     start_minutes = parse_time(primary_segment["start"])
-    end_minutes = parse_time(primary_segment["end"])
-    if start_minutes is None or end_minutes is None:
-        return None, None, 0, []
-
-    worked_minutes = end_minutes - start_minutes
-    break_minutes = SHIFT_CONFIG.get(shift_type, {}).get("break", 0)
-    if worked_minutes <= 360:
-        break_minutes = 0
-
-    midday = 12 * 60
-    if break_minutes:
-        if start_minutes < midday < end_minutes:
-            break_start = midday
-        else:
-            break_start = min(max(start_minutes + 240, start_minutes), end_minutes)
-        morning_end = min(break_start, end_minutes)
-        afternoon_start = min(break_start + break_minutes, end_minutes)
-    elif start_minutes < midday < end_minutes:
-        morning_minutes = midday - start_minutes
-        afternoon_minutes = end_minutes - midday
-        if min(morning_minutes, afternoon_minutes) < 15:
-            if morning_minutes >= afternoon_minutes:
-                morning_end = end_minutes
-                afternoon_start = end_minutes
-            else:
-                morning_end = start_minutes
-                afternoon_start = start_minutes
-        else:
-            morning_end = midday
-            afternoon_start = midday
-    else:
-        morning_end = end_minutes if end_minutes <= midday else start_minutes
-        afternoon_start = start_minutes if start_minutes >= midday else end_minutes
-
-    morning = None
-    afternoon = None
-    if morning_end > start_minutes:
-        morning = valid_segment(minutes_to_time_text(start_minutes), minutes_to_time_text(morning_end))
-    if end_minutes > afternoon_start:
-        afternoon = valid_segment(minutes_to_time_text(afternoon_start), minutes_to_time_text(end_minutes))
-
-    if morning is None and afternoon is None:
-        if end_minutes <= midday:
-            morning = primary_segment
-        else:
-            afternoon = primary_segment
-
-    total_minutes = (morning["minutes"] if morning else 0) + (afternoon["minutes"] if afternoon else 0)
-    return morning, afternoon, total_minutes, []
+    if start_minutes is not None and start_minutes >= 12 * 60:
+        return None, primary_segment, primary_segment["minutes"], []
+    return primary_segment, None, primary_segment["minutes"], []
 
 
 def combine_remarks(*parts: str) -> str:
@@ -1092,19 +1060,35 @@ def aggregate_totals_for_entry(day_value: date, shift_type: str, start_time: str
     return totals
 
 
+def template_total_text_for_entry(day_value: date, shift_type: str, display_total_minutes: int, start_time: str, end_time: str, segments: list[dict[str, str]] | None = None) -> str:
+    if shift_type in {"Urlaub", "Krank", "Feiertag", "Frei"}:
+        return ""
+
+    if shift_type in {"Notdienst", "Arztkrank"}:
+        return format_minutes(display_total_minutes) if display_total_minutes else ""
+
+    totals = aggregate_totals_for_entry(day_value, shift_type, start_time, end_time, segments)
+    base_text = format_minutes(totals.target)
+    if totals.balance:
+        return f"{base_text} = {format_signed_minutes(totals.balance)}"
+    return base_text
+
+
 def month_balance_from_entries(year: int, month: int, month_entries: dict[str, dict]) -> int:
     _, days_in_month = calendar.monthrange(year, month)
     balance_total = 0
     for day_number in range(1, days_in_month + 1):
         current = date(year, month, day_number)
         entry = month_entries.get(current.isoformat())
-        shift_type = entry["shift_type"] if entry else default_type_for(current)
+        if not entry:
+            continue
+        shift_type = entry["shift_type"]
         balance_total += aggregate_totals_for_entry(
             current,
             shift_type,
-            (entry["start_time"] if entry else "") or "",
-            (entry["end_time"] if entry else "") or "",
-            (entry["segments"] if entry else []) or [],
+            entry["start_time"] or "",
+            entry["end_time"] or "",
+            entry["segments"] or [],
         ).balance
     return balance_total
 
@@ -1138,6 +1122,15 @@ def build_template_month_pdf(year: int, month: int):
         (PDF_TEMPLATE_COLUMN_LINES[6] + PDF_TEMPLATE_COLUMN_LINES[7]) / 2,
         (PDF_TEMPLATE_COLUMN_LINES[7] + PDF_TEMPLATE_COLUMN_LINES[8]) / 2,
     ]
+    cell_widths = [
+        template_point_x(PDF_TEMPLATE_COLUMN_LINES[2] - PDF_TEMPLATE_COLUMN_LINES[1] - 18),
+        template_point_x(PDF_TEMPLATE_COLUMN_LINES[3] - PDF_TEMPLATE_COLUMN_LINES[2] - 18),
+        template_point_x(PDF_TEMPLATE_COLUMN_LINES[4] - PDF_TEMPLATE_COLUMN_LINES[3] - 18),
+        template_point_x(PDF_TEMPLATE_COLUMN_LINES[5] - PDF_TEMPLATE_COLUMN_LINES[4] - 18),
+        template_point_x(PDF_TEMPLATE_COLUMN_LINES[6] - PDF_TEMPLATE_COLUMN_LINES[5] - 18),
+        template_point_x(PDF_TEMPLATE_COLUMN_LINES[7] - PDF_TEMPLATE_COLUMN_LINES[6] - 18),
+        template_point_x(PDF_TEMPLATE_COLUMN_LINES[8] - PDF_TEMPLATE_COLUMN_LINES[7] - 18),
+    ]
     notes_left = template_point_x(PDF_TEMPLATE_COLUMN_LINES[8] + 16)
     notes_width = template_point_x(PDF_TEMPLATE_COLUMN_LINES[9] - PDF_TEMPLATE_COLUMN_LINES[8] - 28)
 
@@ -1159,9 +1152,9 @@ def build_template_month_pdf(year: int, month: int):
         notes = (entry["notes"] if entry else "") or ""
 
         morning, afternoon, display_total_minutes, extra_segments = template_segments_for_entry(shift_type, start_time, end_time, segments)
-        total_text = format_minutes(display_total_minutes) if display_total_minutes else ""
-        if shift_type in {"Urlaub", "Krank", "Feiertag", "Frei"} and not morning and not afternoon:
-            total_text = ""
+        total_text = ""
+        if entry:
+            total_text = template_total_text_for_entry(current, shift_type, display_total_minutes, start_time, end_time, segments)
 
         remarks = combine_remarks(
             export_shift_label(shift_type) if shift_type in {"Notdienst", "Urlaub", "Krank", "Arztkrank", "Feiertag"} else "",
@@ -1179,10 +1172,11 @@ def build_template_month_pdf(year: int, month: int):
             total_text,
         ]
 
-        pdf.setFont("Helvetica", row_font_size)
-        for center_x, value in zip(cell_centers, values):
+        for center_x, cell_width, value in zip(cell_centers, cell_widths, values):
             if value:
-                pdf.drawCentredString(template_point_x(center_x), baseline, value)
+                fitted_value, fitted_size = fit_text(pdf, value, cell_width, "Helvetica", row_font_size, 6.0)
+                pdf.setFont("Helvetica", fitted_size)
+                pdf.drawCentredString(template_point_x(center_x), baseline, fitted_value)
 
         if remarks:
             fitted_remark, fitted_size = fit_text(pdf, remarks, notes_width, "Helvetica", notes_font_size)
