@@ -56,12 +56,18 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ["DATA_DIR"]) if os.environ.get("DATA_DIR") else BASE_DIR / "data"
 DB_PATH = DATA_DIR / "zeiterfassung.db"
 STATIC_DIR = BASE_DIR / "static"
-PDF_TEMPLATE_IMAGE_PATH = STATIC_DIR / "pdf" / "elli_stundenzettel_template.jpg"
+PDF_TEMPLATE_IMAGE_PATH = STATIC_DIR / "pdf" / "elli_stundenzettel_template.png"
+PDF_TEMPLATE_IMAGE_FALLBACK_PATH = STATIC_DIR / "pdf" / "elli_stundenzettel_template.jpg"
 PDF_TEMPLATE_PAGE_SIZE = (611, 841)
 PDF_TEMPLATE_SOURCE_SIZE = (5088, 7008)
 PDF_TEMPLATE_COLUMN_LINES = [284, 845, 1298, 1755, 2213, 2670, 3128, 3596, 4038, 4805]
 PDF_TEMPLATE_DAY_ROW_LINES = [1477, 1602, 1724, 1857, 1979, 2105, 2235, 2361, 2486, 2617, 2738, 2867, 2997, 3123, 3251, 3379, 3500, 3628, 3756, 3885, 4008, 4134, 4258, 4391, 4510, 4633, 4761, 4890, 5016, 5145, 5272, 5399]
 PDF_TEMPLATE_SUMMARY_ROW_LINES = [5980, 6188, 6414, 6653]
+PDF_TEMPLATE_HEADER_BASELINE_Y = 620
+PDF_TEMPLATE_NAME_CENTER_X = 1200
+PDF_TEMPLATE_NAME_WIDTH = 1200
+PDF_TEMPLATE_MONTH_CENTER_X = 4050
+PDF_TEMPLATE_MONTH_WIDTH = 1050
 EMPLOYEE_NAME = "Elisabeth"
 
 
@@ -952,6 +958,14 @@ def template_baseline(top_y: float, bottom_y: float, font_size: float) -> float:
     return template_point_y((top_y + bottom_y) / 2) - (font_size * 0.32)
 
 
+def resolve_template_image_path() -> Path | None:
+    if PDF_TEMPLATE_IMAGE_PATH.exists():
+        return PDF_TEMPLATE_IMAGE_PATH
+    if PDF_TEMPLATE_IMAGE_FALLBACK_PATH.exists():
+        return PDF_TEMPLATE_IMAGE_FALLBACK_PATH
+    return None
+
+
 def export_shift_label(shift_type: str) -> str:
     labels = {
         "Fruehschicht": "Fruehschicht",
@@ -1053,6 +1067,28 @@ def fit_text(canvas_obj: canvas.Canvas, text: str, max_width: float, font_name: 
     return trimmed, size
 
 
+def draw_fitted_centered_text(
+    canvas_obj: canvas.Canvas,
+    text: str,
+    center_x_px: float,
+    baseline_y_px: float,
+    max_width_px: float,
+    font_name: str,
+    font_size: float,
+    minimum_size: float = 6.0,
+) -> None:
+    fitted_text, fitted_size = fit_text(
+        canvas_obj,
+        text,
+        template_point_x(max_width_px),
+        font_name,
+        font_size,
+        minimum_size,
+    )
+    canvas_obj.setFont(font_name, fitted_size)
+    canvas_obj.drawCentredString(template_point_x(center_x_px), template_point_y(baseline_y_px), fitted_text)
+
+
 def aggregate_totals_for_entry(day_value: date, shift_type: str, start_time: str, end_time: str, segments: list[dict[str, str]] | None = None) -> Totals:
     totals = calculate_totals(shift_type, start_time, end_time, segments)
     if shift_type == "Notdienst" and day_value.weekday() >= 5:
@@ -1104,12 +1140,31 @@ def build_template_month_pdf(year: int, month: int):
 
     buffer = io.BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=PDF_TEMPLATE_PAGE_SIZE)
-    pdf.drawImage(str(PDF_TEMPLATE_IMAGE_PATH), 0, 0, width=PDF_TEMPLATE_PAGE_SIZE[0], height=PDF_TEMPLATE_PAGE_SIZE[1], preserveAspectRatio=False, mask="auto")
+    template_image_path = resolve_template_image_path()
+    if template_image_path is not None:
+        pdf.drawImage(str(template_image_path), 0, 0, width=PDF_TEMPLATE_PAGE_SIZE[0], height=PDF_TEMPLATE_PAGE_SIZE[1], preserveAspectRatio=False, mask="auto")
 
     pdf.setFillColorRGB(0, 0, 0)
-    pdf.setFont("Helvetica", 12)
-    pdf.drawString(template_point_x(980), template_point_y(610), EMPLOYEE_NAME)
-    pdf.drawString(template_point_x(3900), template_point_y(610), f"{MONTH_NAMES[month - 1]} {year}")
+    draw_fitted_centered_text(
+        pdf,
+        EMPLOYEE_NAME,
+        PDF_TEMPLATE_NAME_CENTER_X,
+        PDF_TEMPLATE_HEADER_BASELINE_Y,
+        PDF_TEMPLATE_NAME_WIDTH,
+        "Helvetica-Bold",
+        13.2,
+        8.0,
+    )
+    draw_fitted_centered_text(
+        pdf,
+        f"{MONTH_NAMES[month - 1]} {year}",
+        PDF_TEMPLATE_MONTH_CENTER_X,
+        PDF_TEMPLATE_HEADER_BASELINE_Y,
+        PDF_TEMPLATE_MONTH_WIDTH,
+        "Helvetica-Bold",
+        13.2,
+        8.0,
+    )
 
     row_font_size = 7.2
     notes_font_size = 6.6
@@ -1398,7 +1453,7 @@ def build_legacy_month_pdf(year: int, month: int):
 
 
 def build_month_pdf(year: int, month: int):
-    if PDF_TEMPLATE_IMAGE_PATH.exists():
+    if resolve_template_image_path() is not None:
         return build_template_month_pdf(year, month)
     return build_legacy_month_pdf(year, month)
 
