@@ -9,6 +9,7 @@ from functools import wraps
 from pathlib import Path
 
 from flask import Flask, jsonify, redirect, render_template, request, send_file, session, url_for
+from pypdf import PdfReader, PdfWriter
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
@@ -56,9 +57,10 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ["DATA_DIR"]) if os.environ.get("DATA_DIR") else BASE_DIR / "data"
 DB_PATH = DATA_DIR / "zeiterfassung.db"
 STATIC_DIR = BASE_DIR / "static"
+PDF_TEMPLATE_PDF_PATH = STATIC_DIR / "pdf" / "elli_stundenzettel_template.pdf"
 PDF_TEMPLATE_IMAGE_PATH = STATIC_DIR / "pdf" / "elli_stundenzettel_template.png"
 PDF_TEMPLATE_IMAGE_FALLBACK_PATH = STATIC_DIR / "pdf" / "elli_stundenzettel_template.jpg"
-PDF_TEMPLATE_PAGE_SIZE = (611, 841)
+PDF_TEMPLATE_PAGE_SIZE = (612, 841)
 PDF_TEMPLATE_SOURCE_SIZE = (5088, 7008)
 PDF_TEMPLATE_COLUMN_LINES = [284, 845, 1298, 1755, 2213, 2670, 3128, 3596, 4038, 4805]
 PDF_TEMPLATE_DAY_ROW_LINES = [1477, 1602, 1724, 1857, 1979, 2105, 2235, 2361, 2486, 2617, 2738, 2867, 2997, 3123, 3251, 3379, 3500, 3628, 3756, 3885, 4008, 4134, 4258, 4391, 4510, 4633, 4761, 4890, 5016, 5145, 5272, 5399]
@@ -966,6 +968,12 @@ def resolve_template_image_path() -> Path | None:
     return None
 
 
+def resolve_template_pdf_path() -> Path | None:
+    if PDF_TEMPLATE_PDF_PATH.exists():
+        return PDF_TEMPLATE_PDF_PATH
+    return None
+
+
 def export_shift_label(shift_type: str) -> str:
     labels = {
         "Fruehschicht": "Fruehschicht",
@@ -1132,6 +1140,22 @@ def template_total_text_for_entry(day_value: date, shift_type: str, display_tota
     return base_text
 
 
+def merge_overlay_with_template(template_pdf_path: Path, overlay_buffer: io.BytesIO) -> io.BytesIO:
+    overlay_buffer.seek(0)
+    template_reader = PdfReader(str(template_pdf_path))
+    overlay_reader = PdfReader(overlay_buffer)
+
+    template_page = template_reader.pages[0]
+    template_page.merge_page(overlay_reader.pages[0])
+
+    output = io.BytesIO()
+    writer = PdfWriter()
+    writer.add_page(template_page)
+    writer.write(output)
+    output.seek(0)
+    return output
+
+
 def month_balance_from_entries(year: int, month: int, month_entries: dict[str, dict]) -> int:
     _, days_in_month = calendar.monthrange(year, month)
     balance_total = 0
@@ -1160,9 +1184,13 @@ def build_template_month_pdf(year: int, month: int):
     previous_balance = month_balance_from_entries(previous_month_date.year, previous_month_date.month, previous_month_entries)
     running_balance = previous_balance + month_balance
 
+    template_pdf_path = resolve_template_pdf_path()
     buffer = io.BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=PDF_TEMPLATE_PAGE_SIZE)
-    template_image_path = resolve_template_image_path()
+    if template_pdf_path is None:
+        template_image_path = resolve_template_image_path()
+    else:
+        template_image_path = None
     if template_image_path is not None:
         pdf.drawImage(str(template_image_path), 0, 0, width=PDF_TEMPLATE_PAGE_SIZE[0], height=PDF_TEMPLATE_PAGE_SIZE[1], preserveAspectRatio=False, mask="auto")
 
@@ -1277,6 +1305,8 @@ def build_template_month_pdf(year: int, month: int):
     pdf.showPage()
     pdf.save()
     buffer.seek(0)
+    if template_pdf_path is not None:
+        return merge_overlay_with_template(template_pdf_path, buffer)
     return buffer
 
 
@@ -1475,7 +1505,7 @@ def build_legacy_month_pdf(year: int, month: int):
 
 
 def build_month_pdf(year: int, month: int):
-    if resolve_template_image_path() is not None:
+    if resolve_template_pdf_path() is not None or resolve_template_image_path() is not None:
         return build_template_month_pdf(year, month)
     return build_legacy_month_pdf(year, month)
 
