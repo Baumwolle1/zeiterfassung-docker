@@ -29,7 +29,7 @@
         </label>
 
         <div class="quick-types">
-          {% for key in ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst", "Urlaub", "Krank", "Arztkrank", "Feiertag", "Frei"] %}
+          {% for key in ["Fruehschicht", "Sommerschicht", "Spaetschicht", "Freitag", "Notdienst", "Urlaub", "Krank", "Arztkrank", "Feiertag", "Frei"] %}
             <button class="chip {% if form_data.shift_type == key %}active{% endif %}" type="button" data-shift-choice="{{ key }}">{{ shift_config[key].label }}</button>
           {% endfor %}
         </div>
@@ -232,7 +232,7 @@
   const hiddenAtKey = "zeiterfassung-hidden-at";
   const skipResumeKey = "zeiterfassung-skip-resume-sync";
   const resumeThresholdMs = 1500;
-  const timeEntryTypes = ["Fruehschicht", "Spaetschicht", "Freitag", "Notdienst", "Arztkrank"];
+  const timeEntryTypes = ["Fruehschicht", "Sommerschicht", "Spaetschicht", "Freitag", "Notdienst", "Arztkrank"];
   let autosaveTimer = null;
   let saveRequestId = 0;
   let latestAppliedRequestId = 0;

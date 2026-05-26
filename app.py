@@ -39,9 +39,11 @@ MONTH_NAMES = [
 ]
 WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 WEEKDAY_SHORT = ["MO", "DI", "MI", "DO", "FR", "SA", "SO"]
+SOMMERSCHICHT_TYPE = "Sommerschicht"
 
 SHIFT_CONFIG = {
     "Fruehschicht": {"label": "Frühschicht", "target": 465, "break": 30, "start": "06:45", "end": "15:00"},
+    SOMMERSCHICHT_TYPE: {"label": "Sommerschicht", "target": 435, "break": 0, "start": "06:45", "end": "14:00"},
     "Spaetschicht": {"label": "Spätschicht", "target": 420, "break": 0, "start": "11:55", "end": "19:00"},
     "Freitag": {"label": "Freitag", "target": 375, "break": 0, "start": "06:45", "end": "13:00"},
     "Notdienst": {"label": "Notdienst", "target": 0, "break": 0, "start": "", "end": ""},
@@ -51,7 +53,7 @@ SHIFT_CONFIG = {
     "Feiertag": {"label": "Feiertag", "target": 0, "break": 0, "start": "", "end": ""},
     "Frei": {"label": "Frei", "target": 0, "break": 0, "start": "", "end": ""},
 }
-WORK_TYPES = ("Fruehschicht", "Spaetschicht", "Freitag", "Notdienst")
+WORK_TYPES = ("Fruehschicht", SOMMERSCHICHT_TYPE, "Spaetschicht", "Freitag", "Notdienst")
 TIME_ENTRY_TYPES = WORK_TYPES + ("Arztkrank",)
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ["DATA_DIR"]) if os.environ.get("DATA_DIR") else BASE_DIR / "data"
@@ -133,6 +135,41 @@ def entry_payload(shift_type: str, start_time: str, end_time: str, notes: str, s
         "notes": notes or "",
         "segments": resolved_segments,
     }
+
+
+def is_sommerschicht_day(day_value: date) -> bool:
+    return day_value.weekday() <= 3
+
+
+def shift_type_for_day(shift_type: str, day_value: date) -> str:
+    if shift_type not in SHIFT_CONFIG:
+        return default_type_for(day_value)
+    if shift_type == SOMMERSCHICHT_TYPE and not is_sommerschicht_day(day_value):
+        return default_type_for(day_value)
+    return shift_type
+
+
+def entry_payload_for_day(day_value: date, shift_type: str, start_time: str, end_time: str, notes: str, segments: list[dict[str, str]] | None = None) -> dict:
+    resolved_shift_type = shift_type_for_day(shift_type, day_value)
+    resolved_segments = normalize_segments(segments or [])
+
+    if resolved_shift_type != shift_type:
+        if resolved_shift_type in TIME_ENTRY_TYPES:
+            start_time = SHIFT_CONFIG[resolved_shift_type]["start"]
+            end_time = SHIFT_CONFIG[resolved_shift_type]["end"]
+            resolved_segments = normalize_segments(default_segments_for_shift(resolved_shift_type, start_time, end_time))
+        else:
+            start_time = ""
+            end_time = ""
+            resolved_segments = []
+    elif resolved_shift_type not in TIME_ENTRY_TYPES:
+        start_time = ""
+        end_time = ""
+        resolved_segments = []
+    elif not resolved_segments:
+        resolved_segments = normalize_segments(default_segments_for_shift(resolved_shift_type, start_time, end_time))
+
+    return entry_payload(resolved_shift_type, start_time, end_time, notes, resolved_segments)
 
 
 def create_app() -> Flask:
@@ -319,17 +356,7 @@ def create_app() -> Flask:
         end_time = normalize_time(request.form.get("end_time", ""))
         notes = request.form.get("notes", "")
 
-        if shift_type not in SHIFT_CONFIG:
-            shift_type = default_type_for(selected_date)
-
-        if shift_type not in TIME_ENTRY_TYPES:
-            start_time = ""
-            end_time = ""
-            segments = []
-        elif not segments:
-            segments = normalize_segments(default_segments_for_shift(shift_type, start_time, end_time))
-
-        payload = entry_payload(shift_type, start_time, end_time, notes, segments)
+        payload = entry_payload_for_day(selected_date, shift_type, start_time, end_time, notes, segments)
         save_entry(selected_date, payload["shift_type"], payload["start_time"], payload["end_time"], payload["notes"], payload["segments"])
         return redirect(url_for("index", year=year, month=month, day=day, view=view_mode))
 
@@ -350,17 +377,7 @@ def create_app() -> Flask:
         end_time = normalize_time(payload.get("end_time", ""))
         notes = payload.get("notes", "") or ""
 
-        if shift_type not in SHIFT_CONFIG:
-            shift_type = default_type_for(selected_date)
-
-        if shift_type not in TIME_ENTRY_TYPES:
-            start_time = ""
-            end_time = ""
-            segments = []
-        elif not segments:
-            segments = normalize_segments(default_segments_for_shift(shift_type, start_time, end_time))
-
-        entry = entry_payload(shift_type, start_time, end_time, notes, segments)
+        entry = entry_payload_for_day(selected_date, shift_type, start_time, end_time, notes, segments)
         save_entry(selected_date, entry["shift_type"], entry["start_time"], entry["end_time"], entry["notes"], entry["segments"])
         totals = calculate_totals(entry["shift_type"], entry["start_time"], entry["end_time"], entry["segments"])
         month_entries = fetch_month_entries(year, month)
@@ -374,7 +391,7 @@ def create_app() -> Flask:
         return jsonify(
             {
                 "ok": True,
-                "shift_type": shift_type,
+                "shift_type": entry["shift_type"],
                 "start_time": entry["start_time"],
                 "end_time": entry["end_time"],
                 "notes": entry["notes"],
@@ -506,7 +523,7 @@ def create_app() -> Flask:
         if segments:
             segments[0][field] = value
 
-        payload = entry_payload(shift_type, start_time, end_time, notes, segments)
+        payload = entry_payload_for_day(selected_date, shift_type, start_time, end_time, notes, segments)
         save_entry(selected_date, payload["shift_type"], payload["start_time"], payload["end_time"], payload["notes"], payload["segments"])
         totals = calculate_totals(payload["shift_type"], payload["start_time"], payload["end_time"], payload["segments"])
         return jsonify(
@@ -564,7 +581,7 @@ def fetch_entry(day_value: date) -> dict | None:
         ).fetchone()
     if not row:
         return None
-    return entry_payload(row[0], row[1] or "", row[2] or "", row[3] or "", segments_for_entry(row[0], row[1] or "", row[2] or "", row[4] or "[]"))
+    return entry_payload_for_day(day_value, row[0], row[1] or "", row[2] or "", row[3] or "", segments_for_entry(row[0], row[1] or "", row[2] or "", row[4] or "[]"))
 
 
 def fetch_month_entries(year: int, month: int) -> dict[str, dict]:
@@ -576,20 +593,22 @@ def fetch_month_entries(year: int, month: int) -> dict[str, dict]:
             "SELECT entry_date, shift_type, start_time, end_time, notes, segments_json FROM entries WHERE entry_date BETWEEN ? AND ?",
             (start.isoformat(), end.isoformat()),
         ).fetchall()
-    return {
-        row[0]: entry_payload(
+    entries: dict[str, dict] = {}
+    for row in rows:
+        day_value = datetime.strptime(row[0], "%Y-%m-%d").date()
+        entries[row[0]] = entry_payload_for_day(
+            day_value,
             row[1],
             row[2] or "",
             row[3] or "",
             row[4] or "",
             segments_for_entry(row[1], row[2] or "", row[3] or "", row[5] or "[]"),
         )
-        for row in rows
-    }
+    return entries
 
 
 def save_entry(day_value: date, shift_type: str, start_time: str, end_time: str, notes: str, segments: list[dict[str, str]] | None = None) -> None:
-    payload = entry_payload(shift_type, start_time, end_time, notes, segments)
+    payload = entry_payload_for_day(day_value, shift_type, start_time, end_time, notes, segments)
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
@@ -977,6 +996,7 @@ def resolve_template_pdf_path() -> Path | None:
 def export_shift_label(shift_type: str) -> str:
     labels = {
         "Fruehschicht": "Fruehschicht",
+        SOMMERSCHICHT_TYPE: "Sommerschicht",
         "Spaetschicht": "Spaetschicht",
         "Freitag": "Freitag",
         "Notdienst": "Notdienst",
@@ -1042,7 +1062,7 @@ def template_segments_for_entry(shift_type: str, start_time: str, end_time: str,
     if not primary_segment:
         return None, None, 0, []
 
-    if shift_type in {"Fruehschicht", "Freitag"}:
+    if shift_type in {"Fruehschicht", SOMMERSCHICHT_TYPE, "Freitag"}:
         totals = calculate_totals(shift_type, start_time, end_time, segments)
         morning = segment_with_minutes(primary_segment["start"], primary_segment["end"], totals.actual)
         return morning, None, totals.actual, []

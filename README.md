@@ -9,9 +9,10 @@ Die App ist darauf ausgelegt, Arbeitszeiten schnell am Handy einzutragen, Wochen
 - Mobile Web-App fuer Handy, Tablet und Desktop
 - Tagesansicht mit Schichtauswahl, Arbeitsbeginn, Arbeitsende und Notizfeld
 - Wochenansicht und Monatsansicht mit schnellen Wechseln zwischen KW und Monat
-- Fruehschicht, Spaetschicht, Freitag, Notdienst, Urlaub, Krank, Arztkrank, Feiertag und Frei
-- Automatische Standardzeiten fuer Fruehschicht, Spaetschicht und Freitag
+- Fruehschicht, Sommerschicht, Spaetschicht, Freitag, Notdienst, Urlaub, Krank, Arztkrank, Feiertag und Frei
+- Automatische Standardzeiten fuer Fruehschicht, Sommerschicht, Spaetschicht und Freitag
 - Automatischer Pausenabzug bei Fruehschicht
+- Sommerschicht von Montag bis Donnerstag ohne Pausenabzug
 - Spaetschicht startet standardmaessig um 11:55 Uhr und zaehlt die 5 Minuten Mehrarbeit mit
 - Freitag wird immer als kurzer Arbeitstag behandelt
 - Notdienst mit mehreren Zeitbloecken pro Tag
@@ -27,6 +28,7 @@ Der PDF-Export fuellt den Stundenzettel automatisch aus:
 
 - Name und Monat werden oben eingetragen
 - Fruehschicht landet im Bereich `Anwesenheit Vormittag`
+- Sommerschicht landet im Bereich `Anwesenheit Vormittag`
 - Spaetschicht landet im Bereich `Anwesenheit Nachmittag`
 - Notdienst kann Vormittag und Nachmittag getrennt darstellen
 - Weitere Notdienst-Zeiten werden in `Bemerkungen` notiert
@@ -40,6 +42,7 @@ Der PDF-Export fuellt den Stundenzettel automatisch aus:
 | Typ | Standardzeit | Wertung |
 | --- | --- | --- |
 | Fruehschicht | 06:45 - 15:00 | 7:45 Stunden, 30 Minuten Pause automatisch abgezogen |
+| Sommerschicht | 06:45 - 14:00 | 7:15 Stunden ohne Pause, Montag bis Donnerstag |
 | Spaetschicht | 11:55 - 19:00 | 7:00 Stunden Soll plus 5 Minuten Mehrarbeit |
 | Freitag | 06:45 - 13:00 | kurzer Freitag ohne Pause |
 | Notdienst | frei eintragbar | zaehlt als Stunden, Wochenend-Notdienst nicht in Gesamtueberstunden |
