@@ -434,7 +434,9 @@
     let balance = 0;
     let deductedBreak = 0;
 
-    if (key === "Notdienst") {
+    if (key === "Sommerschicht") {
+      actual = target;
+    } else if (key === "Notdienst") {
       actual = segments.reduce((sum, segment) => {
         const startMinutes = parseTime(segment.start);
         const endMinutes = parseTime(segment.end);

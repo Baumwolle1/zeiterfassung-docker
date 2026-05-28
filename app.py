@@ -718,6 +718,8 @@ def calculate_totals(shift_type: str, start_time: str, end_time: str, segments: 
     config = SHIFT_CONFIG[shift_type]
     if shift_type not in WORK_TYPES:
         return Totals(target=config["target"], actual=0, balance=0, deducted_break=0)
+    if shift_type == SOMMERSCHICHT_TYPE:
+        return Totals(target=config["target"], actual=config["target"], balance=0, deducted_break=0)
 
     resolved_segments = normalize_segments(segments if segments is not None else default_segments_for_shift(shift_type, start_time, end_time))
     if shift_type == "Notdienst":
@@ -1029,6 +1031,16 @@ def segment_with_minutes(start_time: str, end_time: str, minutes: int) -> dict:
 
 
 def template_segments_for_entry(shift_type: str, start_time: str, end_time: str, segments: list[dict[str, str]] | None) -> tuple[dict | None, dict | None, int, list[str]]:
+    if shift_type == SOMMERSCHICHT_TYPE:
+        totals = calculate_totals(
+            shift_type,
+            SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["start"],
+            SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["end"],
+            default_segments_for_shift(SOMMERSCHICHT_TYPE),
+        )
+        morning = segment_with_minutes(SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["start"], SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["end"], totals.actual)
+        return morning, None, totals.actual, []
+
     if shift_type == "Notdienst":
         valid_segments = []
         for segment in normalize_segments(segments or []):
@@ -1388,7 +1400,12 @@ def build_legacy_month_pdf(year: int, month: int):
         current_week_actual += totals.actual
         current_week_balance += aggregate_balance
         current_week_key = week_key
-        day_segments = segments if shift_type == "Notdienst" and segments else [{"start": (entry["start_time"] if entry else "") or "-", "end": (entry["end_time"] if entry else "") or "-"}]
+        if shift_type == "Notdienst" and segments:
+            day_segments = segments
+        elif shift_type == SOMMERSCHICHT_TYPE:
+            day_segments = [{"start": SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["start"], "end": SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["end"]}]
+        else:
+            day_segments = [{"start": (entry["start_time"] if entry else "") or "-", "end": (entry["end_time"] if entry else "") or "-"}]
         notes_value = (entry["notes"] if entry else "") or "-"
         for segment_index, segment in enumerate(day_segments):
             segment_actual = totals.actual
