@@ -122,6 +122,8 @@ Das Repository enthaelt die App, Templates und Docker-Konfiguration. Persoenlich
 
 ## Stand
 
-Aktueller gesicherter Stand: `Version 1.1`
+Aktueller gesicherter Stand: `Version 1.2`
+
+Die Aenderungen pro Version stehen in [CHANGELOG.md](CHANGELOG.md).
 
 Die App ist fuer den privaten produktiven Einsatz gedacht und kann direkt ueber Docker oder Portainer betrieben werden.
