@@ -206,6 +206,7 @@ def create_app() -> Flask:
             "weekday_names": WEEKDAY_NAMES,
             "shift_config": SHIFT_CONFIG,
             "format_minutes": format_minutes,
+            "format_signed_minutes": format_signed_minutes,
             "balance_class": balance_class,
             "is_authenticated": is_authenticated(),
         }
@@ -484,6 +485,99 @@ def create_app() -> Flask:
         filename = f"Zeiterfassung_{year}_{month:02d}.pdf"
         return send_file(pdf_bytes, mimetype="application/pdf", as_attachment=True, download_name=filename)
 
+    @app.get("/gleitzeit")
+    @login_required
+    def gleitzeit():
+        today = client_today_from_request() or date.today()
+        year = int(request.args.get("year", today.year))
+        month = int(request.args.get("month", today.month))
+        month = max(1, min(month, 12))
+        _, days_in_month = calendar.monthrange(year, month)
+        selected_day = int(request.args.get("day", min(today.day, days_in_month)))
+        selected_day = max(1, min(selected_day, days_in_month))
+        selected_date = date(year, month, selected_day)
+
+        month_entry = fetch_gleitzeit_month(year, month)
+        month_entries = fetch_gleitzeit_month_entries(year, month)
+        selected_entry = month_entries.get(selected_date.isoformat()) or empty_gleitzeit_entry()
+        year_months = fetch_gleitzeit_year_months(year)
+        month_cards = build_gleitzeit_month_cards(year, month, year_months)
+        days = build_gleitzeit_days(year, month, selected_date, month_entries, today)
+        month_totals = summarize_gleitzeit_month(month_entries)
+
+        return render_template(
+            "gleitzeit.html",
+            year=year,
+            month=month,
+            selected_date=selected_date,
+            selected_day=selected_day,
+            today=today,
+            month_entry=month_entry,
+            month_balance_input=minutes_to_input_text(month_entry["manual_balance"]),
+            month_cards=month_cards,
+            days=days,
+            selected_entry=selected_entry,
+            selected_work_segments=selected_entry["work_segments"] or [{"start": "", "end": ""}],
+            selected_flex_segments=selected_entry["flex_segments"] or [{"start": "", "end": ""}],
+            month_totals=month_totals,
+            prev_period=month_nav(year, month, -1),
+            next_period=month_nav(year, month, 1),
+        )
+
+    @app.post("/gleitzeit/month")
+    @login_required
+    def save_gleitzeit_month_route():
+        year = int(request.form["year"])
+        month = int(request.form["month"])
+        day = int(request.form.get("day", "1"))
+        manual_balance = parse_duration_input(request.form.get("manual_balance", ""))
+        notes = request.form.get("notes", "")
+        save_gleitzeit_month(year, month, manual_balance, notes)
+        return redirect(url_for("gleitzeit", year=year, month=month, day=day))
+
+    @app.post("/gleitzeit/day")
+    @login_required
+    def save_gleitzeit_day_route():
+        year = int(request.form["year"])
+        month = int(request.form["month"])
+        day = int(request.form["day"])
+        selected_date = date(year, month, day)
+        work_segments = normalize_segments([
+            {"start": start_value, "end": end_value}
+            for start_value, end_value in zip(
+                request.form.getlist("work_start[]"),
+                request.form.getlist("work_end[]"),
+            )
+        ])
+        flex_segments = normalize_segments([
+            {"start": start_value, "end": end_value}
+            for start_value, end_value in zip(
+                request.form.getlist("flex_start[]"),
+                request.form.getlist("flex_end[]"),
+            )
+        ])
+        notes = request.form.get("notes", "")
+        save_gleitzeit_entry(selected_date, work_segments, flex_segments, notes)
+        return redirect(url_for("gleitzeit", year=year, month=month, day=day))
+
+    @app.post("/gleitzeit/day/delete")
+    @login_required
+    def delete_gleitzeit_day_route():
+        year = int(request.form["year"])
+        month = int(request.form["month"])
+        day = int(request.form["day"])
+        delete_gleitzeit_entry(date(year, month, day))
+        return redirect(url_for("gleitzeit", year=year, month=month, day=day))
+
+    @app.get("/gleitzeit/export/pdf")
+    @login_required
+    def export_gleitzeit_pdf():
+        year = int(request.args.get("year", date.today().year))
+        month = int(request.args.get("month", date.today().month))
+        pdf_bytes = build_gleitzeit_pdf(year, month)
+        filename = f"Gleitzeit_{year}_{month:02d}.pdf"
+        return send_file(pdf_bytes, mimetype="application/pdf", as_attachment=True, download_name=filename)
+
     @app.post("/quick-stamp")
     @login_required
     def quick_stamp():
@@ -577,6 +671,27 @@ def init_db() -> None:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(entries)").fetchall()}
         if "segments_json" not in columns:
             conn.execute("ALTER TABLE entries ADD COLUMN segments_json TEXT DEFAULT '[]'")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS gleitzeit_months (
+                period TEXT PRIMARY KEY,
+                manual_balance_minutes INTEGER NOT NULL DEFAULT 0,
+                notes TEXT DEFAULT '',
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS gleitzeit_entries (
+                entry_date TEXT PRIMARY KEY,
+                work_segments_json TEXT DEFAULT '[]',
+                flex_segments_json TEXT DEFAULT '[]',
+                notes TEXT DEFAULT '',
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
 
 
 def fetch_entry(day_value: date) -> dict | None:
@@ -638,6 +753,256 @@ def save_entry(day_value: date, shift_type: str, start_time: str, end_time: str,
                 json.dumps(payload["segments"], ensure_ascii=True),
             ),
         )
+
+
+def period_key(year: int, month: int) -> str:
+    return f"{year:04d}-{month:02d}"
+
+
+def empty_gleitzeit_entry() -> dict:
+    return {"work_segments": [], "flex_segments": [], "notes": ""}
+
+
+def gleitzeit_entry_payload(work_segments: list[dict[str, str]] | None, flex_segments: list[dict[str, str]] | None, notes: str = "") -> dict:
+    return {
+        "work_segments": normalize_segments(work_segments or []),
+        "flex_segments": normalize_segments(flex_segments or []),
+        "notes": notes or "",
+    }
+
+
+def parse_duration_input(value: str) -> int:
+    text = (value or "").strip().replace(",", ".")
+    if not text:
+        return 0
+    sign = -1 if text.startswith("-") else 1
+    text = text.lstrip("+-").strip()
+    if not text:
+        return 0
+    if ":" in text:
+        hours_text, minutes_text = (text.split(":", 1) + ["0"])[:2]
+        try:
+            hours = int(hours_text or "0")
+            minutes = int(minutes_text or "0")
+        except ValueError:
+            return 0
+        return sign * (hours * 60 + minutes)
+    try:
+        return sign * int(round(float(text) * 60))
+    except ValueError:
+        return 0
+
+
+def minutes_to_input_text(value: int) -> str:
+    sign = "-" if value < 0 else "+" if value > 0 else ""
+    absolute = abs(value)
+    return f"{sign}{absolute // 60:02d}:{absolute % 60:02d}"
+
+
+def segment_minutes(segment: dict[str, str]) -> int:
+    start_minutes = parse_time(segment.get("start", ""))
+    end_minutes = parse_time(segment.get("end", ""))
+    if start_minutes is None or end_minutes is None or end_minutes < start_minutes:
+        return 0
+    return end_minutes - start_minutes
+
+
+def segments_total_minutes(segments: list[dict[str, str]]) -> int:
+    return sum(segment_minutes(segment) for segment in normalize_segments(segments))
+
+
+def segments_text(segments: list[dict[str, str]]) -> str:
+    normalized = normalize_segments(segments)
+    if not normalized:
+        return "-"
+    return ", ".join(f"{segment['start']}-{segment['end']}" for segment in normalized)
+
+
+def fetch_gleitzeit_month(year: int, month: int) -> dict:
+    key = period_key(year, month)
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT manual_balance_minutes, notes FROM gleitzeit_months WHERE period = ?",
+            (key,),
+        ).fetchone()
+    if not row:
+        return {"period": key, "manual_balance": 0, "notes": ""}
+    return {"period": key, "manual_balance": int(row[0] or 0), "notes": row[1] or ""}
+
+
+def fetch_gleitzeit_year_months(year: int) -> dict[str, dict]:
+    start = period_key(year, 1)
+    end = period_key(year, 12)
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            "SELECT period, manual_balance_minutes, notes FROM gleitzeit_months WHERE period BETWEEN ? AND ?",
+            (start, end),
+        ).fetchall()
+    return {
+        row[0]: {"period": row[0], "manual_balance": int(row[1] or 0), "notes": row[2] or ""}
+        for row in rows
+    }
+
+
+def save_gleitzeit_month(year: int, month: int, manual_balance: int, notes: str) -> None:
+    key = period_key(year, month)
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            INSERT INTO gleitzeit_months (period, manual_balance_minutes, notes, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(period) DO UPDATE SET
+                manual_balance_minutes = excluded.manual_balance_minutes,
+                notes = excluded.notes,
+                updated_at = excluded.updated_at
+            """,
+            (key, manual_balance, notes or "", datetime.now().isoformat(timespec="seconds")),
+        )
+
+
+def fetch_gleitzeit_entry(day_value: date) -> dict | None:
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT work_segments_json, flex_segments_json, notes FROM gleitzeit_entries WHERE entry_date = ?",
+            (day_value.isoformat(),),
+        ).fetchone()
+    if not row:
+        return None
+    work_segments = []
+    flex_segments = []
+    try:
+        work_segments = normalize_segments(json.loads(row[0] or "[]"))
+    except json.JSONDecodeError:
+        work_segments = []
+    try:
+        flex_segments = normalize_segments(json.loads(row[1] or "[]"))
+    except json.JSONDecodeError:
+        flex_segments = []
+    return gleitzeit_entry_payload(work_segments, flex_segments, row[2] or "")
+
+
+def fetch_gleitzeit_month_entries(year: int, month: int) -> dict[str, dict]:
+    start = date(year, month, 1)
+    _, days_in_month = calendar.monthrange(year, month)
+    end = date(year, month, days_in_month)
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            "SELECT entry_date, work_segments_json, flex_segments_json, notes FROM gleitzeit_entries WHERE entry_date BETWEEN ? AND ?",
+            (start.isoformat(), end.isoformat()),
+        ).fetchall()
+    entries: dict[str, dict] = {}
+    for row in rows:
+        work_segments = []
+        flex_segments = []
+        try:
+            work_segments = normalize_segments(json.loads(row[1] or "[]"))
+        except json.JSONDecodeError:
+            work_segments = []
+        try:
+            flex_segments = normalize_segments(json.loads(row[2] or "[]"))
+        except json.JSONDecodeError:
+            flex_segments = []
+        entries[row[0]] = gleitzeit_entry_payload(work_segments, flex_segments, row[3] or "")
+    return entries
+
+
+def save_gleitzeit_entry(day_value: date, work_segments: list[dict[str, str]], flex_segments: list[dict[str, str]], notes: str) -> None:
+    payload = gleitzeit_entry_payload(work_segments, flex_segments, notes)
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            INSERT INTO gleitzeit_entries (entry_date, work_segments_json, flex_segments_json, notes, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(entry_date) DO UPDATE SET
+                work_segments_json = excluded.work_segments_json,
+                flex_segments_json = excluded.flex_segments_json,
+                notes = excluded.notes,
+                updated_at = excluded.updated_at
+            """,
+            (
+                day_value.isoformat(),
+                json.dumps(payload["work_segments"], ensure_ascii=True),
+                json.dumps(payload["flex_segments"], ensure_ascii=True),
+                payload["notes"],
+                datetime.now().isoformat(timespec="seconds"),
+            ),
+        )
+
+
+def delete_gleitzeit_entry(day_value: date) -> None:
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("DELETE FROM gleitzeit_entries WHERE entry_date = ?", (day_value.isoformat(),))
+
+
+def summarize_gleitzeit_entry(entry: dict) -> dict:
+    work_minutes = segments_total_minutes(entry.get("work_segments", []))
+    flex_minutes = segments_total_minutes(entry.get("flex_segments", []))
+    return {
+        "work_minutes": work_minutes,
+        "flex_minutes": flex_minutes,
+        "balance_minutes": -flex_minutes,
+        "work_text": segments_text(entry.get("work_segments", [])),
+        "flex_text": segments_text(entry.get("flex_segments", [])),
+    }
+
+
+def summarize_gleitzeit_month(month_entries: dict[str, dict]) -> dict:
+    work_minutes = 0
+    flex_minutes = 0
+    days_with_flex = 0
+    for entry in month_entries.values():
+        summary = summarize_gleitzeit_entry(entry)
+        work_minutes += summary["work_minutes"]
+        flex_minutes += summary["flex_minutes"]
+        if summary["flex_minutes"]:
+            days_with_flex += 1
+    return {
+        "work_minutes": work_minutes,
+        "flex_minutes": flex_minutes,
+        "balance_minutes": -flex_minutes,
+        "days_with_flex": days_with_flex,
+    }
+
+
+def build_gleitzeit_month_cards(year: int, selected_month: int, year_months: dict[str, dict]) -> list[dict]:
+    cards = []
+    for month_number in range(1, 13):
+        key = period_key(year, month_number)
+        month_entry = year_months.get(key, {"manual_balance": 0, "notes": ""})
+        cards.append(
+            {
+                "month": month_number,
+                "label": MONTH_NAMES[month_number - 1],
+                "period": key,
+                "manual_balance": month_entry["manual_balance"],
+                "manual_balance_text": format_signed_minutes(month_entry["manual_balance"]),
+                "is_selected": month_number == selected_month,
+            }
+        )
+    return cards
+
+
+def build_gleitzeit_days(year: int, month: int, selected_date: date, month_entries: dict[str, dict], today: date) -> list[dict]:
+    _, days_in_month = calendar.monthrange(year, month)
+    days = []
+    for day_number in range(1, days_in_month + 1):
+        current = date(year, month, day_number)
+        entry = month_entries.get(current.isoformat())
+        summary = summarize_gleitzeit_entry(entry or empty_gleitzeit_entry())
+        days.append(
+            {
+                "date": current,
+                "weekday": WEEKDAY_NAMES[current.weekday()],
+                "is_selected": current == selected_date,
+                "is_today": current == today,
+                "has_entry": bool(entry),
+                "work_text": format_minutes(summary["work_minutes"]),
+                "flex_text": format_minutes(summary["flex_minutes"]),
+                "balance_text": format_signed_minutes(summary["balance_minutes"]),
+                "balance_class": balance_class(summary["balance_minutes"]),
+            }
+        )
+    return days
 
 
 def count_special_days(year: int) -> tuple[int, int]:
@@ -1230,11 +1595,7 @@ def month_balance_from_entries(year: int, month: int, month_entries: dict[str, d
 def build_template_month_pdf(year: int, month: int):
     month_entries = fetch_month_entries(year, month)
     _, days_in_month = calendar.monthrange(year, month)
-    previous_month_date = shift_month(date(year, month, 15), -1)
-    previous_month_entries = fetch_month_entries(previous_month_date.year, previous_month_date.month)
     month_balance = month_balance_from_entries(year, month, month_entries)
-    previous_balance = month_balance_from_entries(previous_month_date.year, previous_month_date.month, previous_month_entries)
-    running_balance = previous_balance + month_balance
 
     template_pdf_path = resolve_template_pdf_path()
     buffer = io.BytesIO()
@@ -1344,8 +1705,8 @@ def build_template_month_pdf(year: int, month: int):
     summary_font_size = 10.2
     summary_rows = [
         format_signed_minutes(month_balance),
-        format_signed_minutes(previous_balance),
-        format_signed_minutes(running_balance),
+        "",
+        format_signed_minutes(month_balance),
     ]
     pdf.setFont("Helvetica-Bold", summary_font_size)
     for index, value in enumerate(summary_rows):
@@ -1557,6 +1918,112 @@ def build_legacy_month_pdf(year: int, month: int):
 
     story.append(Spacer(1, 6))
     story.append(make_summary_table())
+    document.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+def build_gleitzeit_pdf(year: int, month: int):
+    month_entry = fetch_gleitzeit_month(year, month)
+    month_entries = fetch_gleitzeit_month_entries(year, month)
+    year_months = fetch_gleitzeit_year_months(year)
+    month_totals = summarize_gleitzeit_month(month_entries)
+
+    buffer = io.BytesIO()
+    document = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=12 * mm, leftMargin=12 * mm, topMargin=12 * mm, bottomMargin=12 * mm)
+    styles = getSampleStyleSheet()
+    styles["Title"].fontName = "Helvetica-Bold"
+    styles["Heading2"].fontName = "Helvetica-Bold"
+    styles["Heading3"].fontName = "Helvetica-Bold"
+
+    story = [
+        Paragraph(f"Gleitzeitkonto {MONTH_NAMES[month - 1]} {year}", styles["Title"]),
+        Spacer(1, 6),
+        Paragraph("Separater Nachweis fuer Gleitzeit und manuelle Monatsstaende.", styles["BodyText"]),
+        Spacer(1, 12),
+    ]
+
+    summary_data = [
+        ["Manueller Monatsstand", format_signed_minutes(month_entry["manual_balance"])],
+        ["Gleitzeit im Monat genommen", format_minutes(month_totals["flex_minutes"])],
+        ["Rechnerische Auswirkung", format_signed_minutes(month_totals["balance_minutes"])],
+        ["Tage mit Gleitzeit", str(month_totals["days_with_flex"])],
+    ]
+    if month_entry["notes"]:
+        summary_data.append(["Monatsnotiz", month_entry["notes"]])
+    summary_table = Table(summary_data, colWidths=[62 * mm, 112 * mm])
+    summary_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EAF3FF")),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#C9D7E6")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 14))
+
+    story.append(Paragraph(f"Jahresuebersicht {year}", styles["Heading2"]))
+    year_rows = [["Monat", "Manueller Stand", "Notiz"]]
+    for month_number in range(1, 13):
+        key = period_key(year, month_number)
+        entry = year_months.get(key, {"manual_balance": 0, "notes": ""})
+        year_rows.append([MONTH_NAMES[month_number - 1], format_signed_minutes(entry["manual_balance"]), entry["notes"] or ""])
+    year_table = Table(year_rows, colWidths=[44 * mm, 36 * mm, 94 * mm])
+    year_commands = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DDEBFF")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#16325C")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#C9D7E6")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#FFFFFF"), colors.HexColor("#F9FBFE")]),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (1, 1), (1, -1), "CENTER"),
+    ]
+    for row_index in range(1, len(year_rows)):
+        if row_index == month:
+            year_commands.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#FFF4CC")))
+    year_table.setStyle(TableStyle(year_commands))
+    story.append(year_table)
+    story.append(Spacer(1, 14))
+
+    story.append(Paragraph(f"Tagesnachweis {MONTH_NAMES[month - 1]}", styles["Heading2"]))
+    day_rows = [["Datum", "Arbeit", "Gleitzeit", "Gleitzeit Std.", "Wertung", "Notiz"]]
+    _, days_in_month = calendar.monthrange(year, month)
+    for day_number in range(1, days_in_month + 1):
+        current = date(year, month, day_number)
+        entry = month_entries.get(current.isoformat())
+        if not entry:
+            continue
+        summary = summarize_gleitzeit_entry(entry)
+        day_rows.append(
+            [
+                f"{WEEKDAY_SHORT[current.weekday()]} {current.strftime('%d.%m.%Y')}",
+                summary["work_text"],
+                summary["flex_text"],
+                format_minutes(summary["flex_minutes"]),
+                format_signed_minutes(summary["balance_minutes"]),
+                entry["notes"],
+            ]
+        )
+    if len(day_rows) == 1:
+        day_rows.append(["-", "-", "-", "00:00", "00:00", "Keine Eintraege"])
+
+    day_table = Table(day_rows, colWidths=[28 * mm, 38 * mm, 38 * mm, 24 * mm, 24 * mm, 22 * mm])
+    day_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DDEBFF")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#16325C")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#C9D7E6")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#FFFFFF"), colors.HexColor("#FFFDF2")]),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.8),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (3, 1), (4, -1), "CENTER"),
+    ]))
+    story.append(day_table)
+
     document.build(story)
     buffer.seek(0)
     return buffer

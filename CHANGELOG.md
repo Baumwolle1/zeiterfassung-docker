@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 1.4 - 2026-05-30
+
+- Bestehender Stundenzettel bleibt unveraendert, nur der automatische Vormonatsuebertrag im PDF bleibt leer.
+- Separates Gleitzeitkonto als eigener Bereich mit Jahres-, Monats- und Tagesansicht hinzugefuegt.
+- Gleitzeitkonto speichert manuelle Monatsstaende sowie Tagesdetails zu Arbeitszeit und genommener Gleitzeit.
+- Separater PDF-Export fuer das Gleitzeitkonto hinzugefuegt.
+
 ## Version 1.3 - 2026-05-30
 
 - Sommerschicht kann jetzt auch am Freitag ausgewaehlt werden.

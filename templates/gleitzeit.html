@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="shell gleitzeit-shell">
+  <section class="hero glass gleitzeit-hero">
+    <div>
+      <p class="eyebrow">Separates Konto</p>
+      <h1>Gleitzeitkonto</h1>
+      <p class="subtitle">{{ month_names[month - 1] }} {{ year }}</p>
+    </div>
+    <div class="hero-actions">
+      <a class="button soft" href="{{ url_for('index', year=year, month=month, day=selected_day, view='week') }}">Stundenzettel</a>
+      <a class="button dark" href="{{ url_for('export_gleitzeit_pdf', year=year, month=month) }}">Gleitzeit-PDF</a>
+      <form method="post" action="{{ url_for('logout') }}" class="inline-form">
+        <button class="button soft" type="submit">Logout</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="gleitzeit-layout">
+    <section class="glass gleitzeit-panel">
+      <div class="month-header">
+        <a class="icon-button" href="{{ url_for('gleitzeit', year=prev_period.year, month=prev_period.month, day=1) }}">&#8592;</a>
+        <div>
+          <h2>{{ month_names[month - 1] }} {{ year }}</h2>
+          <p>Monatskonto</p>
+        </div>
+        <a class="icon-button" href="{{ url_for('gleitzeit', year=next_period.year, month=next_period.month, day=1) }}">&#8594;</a>
+      </div>
+
+      <div class="gleitzeit-summary-grid">
+        <article class="summary-card glass">
+          <span>Manueller Stand</span>
+          <strong class="{{ balance_class(month_entry.manual_balance) }}">{{ format_signed_minutes(month_entry.manual_balance) }}</strong>
+        </article>
+        <article class="summary-card glass">
+          <span>Gleitzeit genommen</span>
+          <strong>{{ format_minutes(month_totals.flex_minutes) }}</strong>
+        </article>
+        <article class="summary-card glass">
+          <span>Wertung</span>
+          <strong class="{{ balance_class(month_totals.balance_minutes) }}">{{ format_signed_minutes(month_totals.balance_minutes) }}</strong>
+        </article>
+      </div>
+
+      <form method="post" action="{{ url_for('save_gleitzeit_month_route') }}" class="entry-form">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="month" value="{{ month }}">
+        <input type="hidden" name="day" value="{{ selected_day }}">
+        <label>
+          <span>Monatsstand</span>
+          <input name="manual_balance" type="text" value="{{ month_balance_input }}" placeholder="+02:30">
+        </label>
+        <label>
+          <span>Monatsnotiz</span>
+          <textarea name="notes" rows="3" placeholder="Optional">{{ month_entry.notes }}</textarea>
+        </label>
+        <button class="button primary" type="submit">Monat speichern</button>
+      </form>
+
+      <div class="month-ledger">
+        {% for item in month_cards %}
+          <a class="ledger-month glass {% if item.is_selected %}selected{% endif %}" href="{{ url_for('gleitzeit', year=year, month=item.month, day=1) }}">
+            <span>{{ item.label }}</span>
+            <strong class="{{ balance_class(item.manual_balance) }}">{{ item.manual_balance_text }}</strong>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="glass gleitzeit-panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Ausgewaehlter Tag</p>
+          <h2>{{ weekday_names[selected_date.weekday()] }}, {{ selected_date.strftime("%d.%m.%Y") }}</h2>
+        </div>
+      </div>
+
+      <form method="post" action="{{ url_for('save_gleitzeit_day_route') }}" class="entry-form gleitzeit-day-form">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="month" value="{{ month }}">
+        <input type="hidden" name="day" value="{{ selected_day }}">
+
+        <div class="gleitzeit-block">
+          <div class="gleitzeit-block-head">
+            <span>Arbeitszeit</span>
+            <button class="button tiny soft" type="button" data-add-row="work">Zeile hinzufuegen</button>
+          </div>
+          <div class="segment-list" data-segment-list="work">
+            {% for segment in selected_work_segments %}
+              <div class="gleitzeit-segment-row" data-row>
+                <label>
+                  <span>Von</span>
+                  <input data-time-input name="work_start[]" type="text" value="{{ segment.start }}" placeholder="06:45">
+                </label>
+                <label>
+                  <span>Bis</span>
+                  <input data-time-input name="work_end[]" type="text" value="{{ segment.end }}" placeholder="15:00">
+                </label>
+                <button class="button tiny soft" type="button" data-remove-row>Entfernen</button>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="gleitzeit-block flex-block">
+          <div class="gleitzeit-block-head">
+            <span>Gleitzeit</span>
+            <button class="button tiny soft" type="button" data-add-row="flex">Zeile hinzufuegen</button>
+          </div>
+          <div class="segment-list" data-segment-list="flex">
+            {% for segment in selected_flex_segments %}
+              <div class="gleitzeit-segment-row" data-row>
+                <label>
+                  <span>Von</span>
+                  <input data-time-input name="flex_start[]" type="text" value="{{ segment.start }}" placeholder="11:00">
+                </label>
+                <label>
+                  <span>Bis</span>
+                  <input data-time-input name="flex_end[]" type="text" value="{{ segment.end }}" placeholder="15:00">
+                </label>
+                <button class="button tiny soft" type="button" data-remove-row>Entfernen</button>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <label>
+          <span>Notiz</span>
+          <textarea name="notes" rows="3" placeholder="Optional">{{ selected_entry.notes }}</textarea>
+        </label>
+
+        <div class="gleitzeit-form-actions">
+          <button class="button primary" type="submit">Tag speichern</button>
+        </div>
+      </form>
+      <form method="post" action="{{ url_for('delete_gleitzeit_day_route') }}" class="inline-form delete-day-form">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="month" value="{{ month }}">
+        <input type="hidden" name="day" value="{{ selected_day }}">
+        <button class="button soft" type="submit">Tag leeren</button>
+      </form>
+    </section>
+  </section>
+
+  <section class="glass gleitzeit-panel gleitzeit-calendar-panel">
+    <div class="weekly-overview-head">
+      <div>
+        <p class="eyebrow">Tage</p>
+        <h2>{{ month_names[month - 1] }} {{ year }}</h2>
+      </div>
+      <div class="weekly-overview-totals">
+        <span>Gleitzeit {{ format_minutes(month_totals.flex_minutes) }}</span>
+      </div>
+    </div>
+    <div class="gleitzeit-days">
+      {% for item in days %}
+        <a class="gleitzeit-day glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %} {% if item.has_entry %}has-entry{% endif %}" href="{{ url_for('gleitzeit', year=year, month=month, day=item.date.day) }}">
+          <div class="day-number">{{ "%02d"|format(item.date.day) }}</div>
+          <div>
+            <strong>{{ item.weekday }}</strong>
+            <span>Arbeit {{ item.work_text }} | Gleitzeit {{ item.flex_text }}</span>
+          </div>
+          <div class="balance {{ item.balance_class }}">{{ item.balance_text }}</div>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <footer class="version-footer">
+    <span>Version 1.4</span>
+  </footer>
+</main>
+
+<script>
+  function formatTimeInput(value) {
+    const digits = String(value || "").replace(/\D/g, "").slice(0, 4);
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+  }
+
+  function bindTimeInput(input) {
+    input.addEventListener("input", () => {
+      input.value = formatTimeInput(input.value);
+    });
+  }
+
+  document.querySelectorAll("[data-time-input]").forEach(bindTimeInput);
+
+  document.querySelectorAll("[data-add-row]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const type = button.dataset.addRow;
+      const list = document.querySelector(`[data-segment-list="${type}"]`);
+      const startName = type === "work" ? "work_start[]" : "flex_start[]";
+      const endName = type === "work" ? "work_end[]" : "flex_end[]";
+      const row = document.createElement("div");
+      row.className = "gleitzeit-segment-row";
+      row.setAttribute("data-row", "");
+      row.innerHTML = `
+        <label>
+          <span>Von</span>
+          <input data-time-input name="${startName}" type="text" value="" placeholder="${type === "work" ? "06:45" : "11:00"}">
+        </label>
+        <label>
+          <span>Bis</span>
+          <input data-time-input name="${endName}" type="text" value="" placeholder="${type === "work" ? "15:00" : "15:00"}">
+        </label>
+        <button class="button tiny soft" type="button" data-remove-row>Entfernen</button>
+      `;
+      row.querySelectorAll("[data-time-input]").forEach(bindTimeInput);
+      list.appendChild(row);
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    const removeButton = event.target.closest("[data-remove-row]");
+    if (!removeButton) return;
+    const list = removeButton.closest("[data-segment-list]");
+    const row = removeButton.closest("[data-row]");
+    if (!list || !row) return;
+    if (list.querySelectorAll("[data-row]").length <= 1) {
+      row.querySelectorAll("input").forEach((input) => { input.value = ""; });
+      return;
+    }
+    row.remove();
+  });
+</script>
+{% endblock %}
