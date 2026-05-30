@@ -1,11 +1,16 @@
 # Changelog
 
+## Version 1.7 - 2026-05-30
+
+- Bezeichnung der laufenden Gleitzeit-Summe auf "Gesamtstand" geaendert.
+- Gleitzeit-Oberflaeche, Autosave-Anzeige, PDF-Export und Dokumentation verwenden jetzt dieselbe Bezeichnung.
+
 ## Version 1.6 - 2026-05-30
 
 - Gleitzeit-Tagesformular speichert jetzt per Autosave und aktualisiert Tages-, Monats- und Jahressummen direkt in der Ansicht.
 - Gleitzeitkonto uebernimmt die Monats-Plus-/Minusstunden automatisch aus der normalen Zeiterfassung.
-- Genommene Gleitzeit wird vom jeweiligen Monatswert abgezogen und in einer Summa-summarum-Summe bis zum gewaehlten Monat zusammengefuehrt.
-- Gleitzeit-PDF zeigt Zeiterfassung, Korrektur, genommene Gleitzeit, Monatssaldo und Summa summarum.
+- Genommene Gleitzeit wird vom jeweiligen Monatswert abgezogen und im Gesamtstand bis zum gewaehlten Monat zusammengefuehrt.
+- Gleitzeit-PDF zeigt Zeiterfassung, Korrektur, genommene Gleitzeit, Monatssaldo und Gesamtstand.
 
 ## Version 1.5 - 2026-05-30
 

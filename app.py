@@ -2084,7 +2084,7 @@ def build_gleitzeit_pdf(year: int, month: int):
         ["Gleitzeit im Monat genommen", format_minutes(month_summary["flex_minutes"])],
         ["Gleitzeit-Wertung", format_signed_minutes(month_summary["flex_balance"])],
         ["Monat gesamt", format_signed_minutes(month_summary["total_balance"])],
-        [f"Summa summarum bis {MONTH_NAMES[month - 1]}", format_signed_minutes(year_summary["selected_total_balance"])],
+        [f"Gesamtstand bis {MONTH_NAMES[month - 1]}", format_signed_minutes(year_summary["selected_total_balance"])],
         ["Tage mit Gleitzeit", str(month_summary["days_with_flex"])],
     ]
     if month_entry["notes"]:
@@ -2117,7 +2117,7 @@ def build_gleitzeit_pdf(year: int, month: int):
                 format_signed_minutes(summary["running_balance"]),
             ]
         )
-    year_rows.append([f"Summa summarum bis {MONTH_NAMES[month - 1]}", "", "", "", "", format_signed_minutes(year_summary["selected_total_balance"])])
+    year_rows.append([f"Gesamtstand bis {MONTH_NAMES[month - 1]}", "", "", "", "", format_signed_minutes(year_summary["selected_total_balance"])])
     year_table = Table(year_rows, colWidths=[28 * mm, 28 * mm, 26 * mm, 30 * mm, 30 * mm, 32 * mm])
     year_commands = [
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DDEBFF")),

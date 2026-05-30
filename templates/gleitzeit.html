@@ -69,7 +69,7 @@
         {% endfor %}
       </div>
       <div class="gleitzeit-year-total glass">
-        <span>Summa summarum bis {{ month_names[month - 1] }}</span>
+        <span>Gesamtstand bis {{ month_names[month - 1] }}</span>
         <strong data-year-selected-total class="{{ balance_class(year_summary.selected_total_balance) }}">{{ format_signed_minutes(year_summary.selected_total_balance) }}</strong>
       </div>
     </section>
@@ -157,7 +157,7 @@
       </div>
       <div class="weekly-overview-totals">
         <span data-month-flex-total>Gleitzeit {{ format_minutes(month_summary.flex_minutes) }}</span>
-        <span data-year-selected-total-line>Summa summarum {{ format_signed_minutes(year_summary.selected_total_balance) }}</span>
+        <span data-year-selected-total-line>Gesamtstand {{ format_signed_minutes(year_summary.selected_total_balance) }}</span>
       </div>
     </div>
     <div class="gleitzeit-days">
@@ -175,7 +175,7 @@
   </section>
 
   <footer class="version-footer">
-    <span>Version 1.6</span>
+    <span>Version 1.7</span>
   </footer>
 </main>
 
@@ -212,7 +212,7 @@
     }
     if (data.year_summary) {
       setBalance("[data-year-selected-total]", data.year_summary.selected_total_balance, data.year_summary.selected_total_balance_class);
-      setText("[data-year-selected-total-line]", `Summa summarum ${data.year_summary.selected_total_balance}`);
+      setText("[data-year-selected-total-line]", `Gesamtstand ${data.year_summary.selected_total_balance}`);
     }
     if (Array.isArray(data.month_cards)) {
       data.month_cards.forEach((card) => {
