@@ -138,6 +138,10 @@ def entry_payload(shift_type: str, start_time: str, end_time: str, notes: str, s
 
 
 def is_sommerschicht_day(day_value: date) -> bool:
+    return day_value.weekday() <= 4
+
+
+def is_sommerschicht_full_workday(day_value: date) -> bool:
     return day_value.weekday() <= 3
 
 
@@ -257,7 +261,8 @@ def create_app() -> Flask:
             current_date = date(year, month, day_number)
             entry = month_entries.get(current_date.isoformat())
             shift_type = entry["shift_type"] if entry else default_type_for(current_date)
-            totals = calculate_totals(
+            totals = calculate_totals_for_day(
+                current_date,
                 shift_type,
                 (entry["start_time"] if entry else "") or "",
                 (entry["end_time"] if entry else "") or "",
@@ -284,7 +289,8 @@ def create_app() -> Flask:
             if entry
             else entry_payload(default_type_for(selected_date), "", "", "")
         )
-        selected_totals = calculate_totals(
+        selected_totals = calculate_totals_for_day(
+            selected_date,
             form_data["shift_type"],
             form_data["start_time"],
             form_data["end_time"],
@@ -379,7 +385,7 @@ def create_app() -> Flask:
 
         entry = entry_payload_for_day(selected_date, shift_type, start_time, end_time, notes, segments)
         save_entry(selected_date, entry["shift_type"], entry["start_time"], entry["end_time"], entry["notes"], entry["segments"])
-        totals = calculate_totals(entry["shift_type"], entry["start_time"], entry["end_time"], entry["segments"])
+        totals = calculate_totals_for_day(selected_date, entry["shift_type"], entry["start_time"], entry["end_time"], entry["segments"])
         month_entries = fetch_month_entries(year, month)
         week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, entry)
         week_balance_total = week_actual - week_target
@@ -525,7 +531,7 @@ def create_app() -> Flask:
 
         payload = entry_payload_for_day(selected_date, shift_type, start_time, end_time, notes, segments)
         save_entry(selected_date, payload["shift_type"], payload["start_time"], payload["end_time"], payload["notes"], payload["segments"])
-        totals = calculate_totals(payload["shift_type"], payload["start_time"], payload["end_time"], payload["segments"])
+        totals = calculate_totals_for_day(selected_date, payload["shift_type"], payload["start_time"], payload["end_time"], payload["segments"])
         return jsonify(
             {
                 "ok": True,
@@ -744,6 +750,12 @@ def calculate_totals(shift_type: str, start_time: str, end_time: str, segments: 
     return Totals(target=config["target"], actual=actual, balance=actual - config["target"], deducted_break=deducted_break)
 
 
+def calculate_totals_for_day(day_value: date, shift_type: str, start_time: str, end_time: str, segments: list[dict[str, str]] | None = None) -> Totals:
+    if shift_type == SOMMERSCHICHT_TYPE and not is_sommerschicht_full_workday(day_value):
+        return Totals(target=0, actual=0, balance=0, deducted_break=0)
+    return calculate_totals(shift_type, start_time, end_time, segments)
+
+
 def calculate_ranges(selected_date: date, month_entries: dict[str, dict], selected_form: dict) -> tuple[int, int, int, int]:
     week_start = selected_date - timedelta(days=selected_date.weekday())
     week_end = week_start + timedelta(days=6)
@@ -874,10 +886,11 @@ def serialize_week_summaries(week_summaries: list[dict]) -> list[dict]:
 
 def totals_for_day(day_value: date, month_entries: dict[str, dict], selected_date: date, selected_form: dict) -> Totals:
     if day_value == selected_date:
-        return calculate_totals(selected_form["shift_type"], selected_form["start_time"], selected_form["end_time"], selected_form["segments"])
+        return calculate_totals_for_day(day_value, selected_form["shift_type"], selected_form["start_time"], selected_form["end_time"], selected_form["segments"])
     entry = month_entries.get(day_value.isoformat())
     shift_type = entry["shift_type"] if entry else default_type_for(day_value)
-    return calculate_totals(
+    return calculate_totals_for_day(
+        day_value,
         shift_type,
         (entry["start_time"] if entry else "") or "",
         (entry["end_time"] if entry else "") or "",
@@ -888,11 +901,12 @@ def totals_for_day(day_value: date, month_entries: dict[str, dict], selected_dat
 def totals_for_aggregate_day(day_value: date, month_entries: dict[str, dict], selected_date: date, selected_form: dict) -> Totals:
     if day_value == selected_date:
         shift_type = selected_form["shift_type"]
-        totals = calculate_totals(shift_type, selected_form["start_time"], selected_form["end_time"], selected_form["segments"])
+        totals = calculate_totals_for_day(day_value, shift_type, selected_form["start_time"], selected_form["end_time"], selected_form["segments"])
     else:
         entry = month_entries.get(day_value.isoformat())
         shift_type = entry["shift_type"] if entry else default_type_for(day_value)
-        totals = calculate_totals(
+        totals = calculate_totals_for_day(
+            day_value,
             shift_type,
             (entry["start_time"] if entry else "") or "",
             (entry["end_time"] if entry else "") or "",
@@ -1030,15 +1044,21 @@ def segment_with_minutes(start_time: str, end_time: str, minutes: int) -> dict:
     return {"start": start_time, "end": end_time, "minutes": max(minutes, 0)}
 
 
-def template_segments_for_entry(shift_type: str, start_time: str, end_time: str, segments: list[dict[str, str]] | None) -> tuple[dict | None, dict | None, int, list[str]]:
+def template_segments_for_entry(day_value: date, shift_type: str, start_time: str, end_time: str, segments: list[dict[str, str]] | None) -> tuple[dict | None, dict | None, int, list[str]]:
     if shift_type == SOMMERSCHICHT_TYPE:
-        totals = calculate_totals(
-            shift_type,
-            SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["start"],
-            SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["end"],
-            default_segments_for_shift(SOMMERSCHICHT_TYPE),
-        )
-        morning = segment_with_minutes(SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["start"], SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["end"], totals.actual)
+        if is_sommerschicht_full_workday(day_value):
+            start_time = SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["start"]
+            end_time = SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["end"]
+            segments = default_segments_for_shift(SOMMERSCHICHT_TYPE)
+        primary_segment = valid_segment(start_time, end_time)
+        if not primary_segment:
+            resolved_segments = normalize_segments(segments or [])
+            if resolved_segments:
+                primary_segment = valid_segment(resolved_segments[0]["start"], resolved_segments[0]["end"])
+        if not primary_segment:
+            return None, None, 0, []
+        totals = calculate_totals_for_day(day_value, shift_type, start_time, end_time, segments)
+        morning = segment_with_minutes(primary_segment["start"], primary_segment["end"], totals.actual)
         return morning, None, totals.actual, []
 
     if shift_type == "Notdienst":
@@ -1152,7 +1172,7 @@ def draw_fitted_left_text(
 
 
 def aggregate_totals_for_entry(day_value: date, shift_type: str, start_time: str, end_time: str, segments: list[dict[str, str]] | None = None) -> Totals:
-    totals = calculate_totals(shift_type, start_time, end_time, segments)
+    totals = calculate_totals_for_day(day_value, shift_type, start_time, end_time, segments)
     if shift_type == "Notdienst" and day_value.weekday() >= 5:
         return Totals(target=totals.target, actual=0, balance=0, deducted_break=0)
     return totals
@@ -1288,7 +1308,7 @@ def build_template_month_pdf(year: int, month: int):
         segments = (entry["segments"] if entry else []) or []
         notes = (entry["notes"] if entry else "") or ""
 
-        morning, afternoon, display_total_minutes, extra_segments = template_segments_for_entry(shift_type, start_time, end_time, segments)
+        morning, afternoon, display_total_minutes, extra_segments = template_segments_for_entry(current, shift_type, start_time, end_time, segments)
         total_text = ""
         if entry:
             total_text = template_total_text_for_entry(current, shift_type, display_total_minutes, start_time, end_time, segments)
@@ -1388,7 +1408,8 @@ def build_legacy_month_pdf(year: int, month: int):
         entry = month_entries.get(current.isoformat())
         shift_type = entry["shift_type"] if entry else default_type_for(current)
         segments = (entry["segments"] if entry else []) or []
-        totals = calculate_totals(
+        totals = calculate_totals_for_day(
+            current,
             shift_type,
             (entry["start_time"] if entry else "") or "",
             (entry["end_time"] if entry else "") or "",
@@ -1402,7 +1423,7 @@ def build_legacy_month_pdf(year: int, month: int):
         current_week_key = week_key
         if shift_type == "Notdienst" and segments:
             day_segments = segments
-        elif shift_type == SOMMERSCHICHT_TYPE:
+        elif shift_type == SOMMERSCHICHT_TYPE and is_sommerschicht_full_workday(current):
             day_segments = [{"start": SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["start"], "end": SHIFT_CONFIG[SOMMERSCHICHT_TYPE]["end"]}]
         else:
             day_segments = [{"start": (entry["start_time"] if entry else "") or "-", "end": (entry["end_time"] if entry else "") or "-"}]

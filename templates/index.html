@@ -200,13 +200,14 @@
   </section>
 
   <footer class="version-footer">
-    <span>Version 1.2</span>
+    <span>Version 1.3</span>
   </footer>
 </main>
 
 <script>
   const form = document.querySelector(".entry-form");
   const currentView = {{ view_mode | tojson }};
+  const selectedWeekday = {{ selected_date.weekday() | tojson }};
   const shiftSelect = document.getElementById("shift_type");
   const timeSegments = document.getElementById("time-segments");
   const defaults = {{ shift_config | tojson }};
@@ -429,12 +430,14 @@
     }
 
     const segments = getCurrentSegments();
-    const target = current.target;
+    let target = current.target;
     let actual = 0;
     let balance = 0;
     let deductedBreak = 0;
 
-    if (key === "Sommerschicht") {
+    if (key === "Sommerschicht" && selectedWeekday === 4) {
+      target = 0;
+    } else if (key === "Sommerschicht") {
       actual = target;
     } else if (key === "Notdienst") {
       actual = segments.reduce((sum, segment) => {

@@ -13,6 +13,7 @@ Die App ist darauf ausgelegt, Arbeitszeiten schnell am Handy einzutragen, Wochen
 - Automatische Standardzeiten fuer Fruehschicht, Sommerschicht, Spaetschicht und Freitag
 - Automatischer Pausenabzug bei Fruehschicht
 - Sommerschicht von Montag bis Donnerstag als voller Arbeitstag ohne Pausenabzug und ohne Plus-/Minusstunden
+- Sommerschicht am Freitag ist dokumentarisch mit frei eintragbaren Zeiten und wird nicht gewertet
 - Spaetschicht startet standardmaessig um 11:55 Uhr und zaehlt die 5 Minuten Mehrarbeit mit
 - Freitag wird immer als kurzer Arbeitstag behandelt
 - Notdienst mit mehreren Zeitbloecken pro Tag
@@ -42,7 +43,7 @@ Der PDF-Export fuellt den Stundenzettel automatisch aus:
 | Typ | Standardzeit | Wertung |
 | --- | --- | --- |
 | Fruehschicht | 06:45 - 15:00 | 7:45 Stunden, 30 Minuten Pause automatisch abgezogen |
-| Sommerschicht | 06:45 - 14:00 | 7:15 Stunden als voller Arbeitstag ohne Pause, ohne Plus-/Minusstunden, Montag bis Donnerstag |
+| Sommerschicht | 06:45 - 14:00 | Montag bis Donnerstag 7:15 Stunden als voller Arbeitstag ohne Pause; Freitag frei eintragbar ohne Wertung |
 | Spaetschicht | 11:55 - 19:00 | 7:00 Stunden Soll plus 5 Minuten Mehrarbeit |
 | Freitag | 06:45 - 13:00 | kurzer Freitag ohne Pause |
 | Notdienst | frei eintragbar | zaehlt als Stunden, Wochenend-Notdienst nicht in Gesamtueberstunden |
@@ -122,7 +123,7 @@ Das Repository enthaelt die App, Templates und Docker-Konfiguration. Persoenlich
 
 ## Stand
 
-Aktueller gesicherter Stand: `Version 1.2`
+Aktueller gesicherter Stand: `Version 1.3`
 
 Die Aenderungen pro Version stehen in [CHANGELOG.md](CHANGELOG.md).
 
