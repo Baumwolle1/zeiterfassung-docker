@@ -74,10 +74,10 @@
       </div>
     </section>
 
-    <section class="glass gleitzeit-panel">
+    <section class="glass gleitzeit-panel" id="gleitzeit-day-entry">
       <div class="panel-head">
         <div>
-          <p class="eyebrow">Ausgewaehlter Tag</p>
+          <p class="eyebrow">Ausgewählter Tag</p>
           <h2>{{ weekday_names[selected_date.weekday()] }}, {{ selected_date.strftime("%d.%m.%Y") }}</h2>
         </div>
       </div>
@@ -90,7 +90,7 @@
         <div class="gleitzeit-block">
           <div class="gleitzeit-block-head">
             <span>Arbeitszeit</span>
-            <button class="button tiny soft" type="button" data-add-row="work">Zeile hinzufuegen</button>
+            <button class="button tiny soft" type="button" data-add-row="work">Zeile hinzufügen</button>
           </div>
           <div class="segment-list" data-segment-list="work">
             {% for segment in selected_work_segments %}
@@ -112,7 +112,7 @@
         <div class="gleitzeit-block flex-block">
           <div class="gleitzeit-block-head">
             <span>Gleitzeit</span>
-            <button class="button tiny soft" type="button" data-add-row="flex">Zeile hinzufuegen</button>
+            <button class="button tiny soft" type="button" data-add-row="flex">Zeile hinzufügen</button>
           </div>
           <div class="segment-list" data-segment-list="flex">
             {% for segment in selected_flex_segments %}
@@ -162,7 +162,7 @@
     </div>
     <div class="gleitzeit-days">
       {% for item in days %}
-        <a class="gleitzeit-day glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %} {% if item.has_entry %}has-entry{% endif %}" data-day-card="{{ item.date.day }}" href="{{ url_for('gleitzeit', year=year, month=month, day=item.date.day) }}">
+        <a class="gleitzeit-day glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %} {% if item.has_entry %}has-entry{% endif %}" data-day-card="{{ item.date.day }}" data-no-scroll-restore href="{{ url_for('gleitzeit', year=year, month=month, day=item.date.day) }}#gleitzeit-day-entry">
           <div class="day-number">{{ "%02d"|format(item.date.day) }}</div>
           <div>
             <strong>{{ item.weekday }}</strong>
@@ -175,7 +175,7 @@
   </section>
 
   <footer class="version-footer">
-    <span>Version 1.8</span>
+    <span>Version 1.9</span>
   </footer>
 </main>
 

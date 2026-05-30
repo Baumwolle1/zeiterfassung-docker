@@ -1,37 +1,37 @@
 # Zeiterfassung Docker
 
-Eine schlanke, mobile Zeiterfassung fuer Schichtarbeit, gebaut fuer Docker, Portainer und den dauerhaften Betrieb auf einem NAS oder kleinen Server.
+Eine schlanke, mobile Zeiterfassung für Schichtarbeit, gebaut für Docker, Portainer und den dauerhaften Betrieb auf einem NAS oder kleinen Server.
 
 Die App ist darauf ausgelegt, Arbeitszeiten schnell am Handy einzutragen, Wochen und Monate sauber zu kontrollieren und am Ende einen fertigen Stundenzettel als PDF auszugeben.
 
 ## Funktionen
 
-- Mobile Web-App fuer Handy, Tablet und Desktop
+- Mobile Web-App für Handy, Tablet und Desktop
 - Tagesansicht mit Schichtauswahl, Arbeitsbeginn, Arbeitsende und Notizfeld
 - Wochenansicht und Monatsansicht mit schnellen Wechseln zwischen KW und Monat
-- Fruehschicht, Sommerschicht, Spaetschicht, Freitag, Notdienst, Urlaub, Krank, Arztkrank, Feiertag und Frei
-- Automatische Standardzeiten fuer Fruehschicht, Sommerschicht, Spaetschicht und Freitag
-- Automatischer Pausenabzug bei Fruehschicht
+- Frühschicht, Sommerschicht, Spätschicht, Freitag, Notdienst, Urlaub, Krank, Arztkrank, Feiertag und Frei
+- Automatische Standardzeiten für Frühschicht, Sommerschicht, Spätschicht und Freitag
+- Automatischer Pausenabzug bei Frühschicht
 - Sommerschicht von Montag bis Donnerstag als voller Arbeitstag ohne Pausenabzug und ohne Plus-/Minusstunden
 - Sommerschicht am Freitag ist dokumentarisch mit frei eintragbaren Zeiten und wird nicht gewertet
-- Spaetschicht startet standardmaessig um 11:55 Uhr und zaehlt die 5 Minuten Mehrarbeit mit
+- Spätschicht startet standardmäßig um 11:55 Uhr und zählt die 5 Minuten Mehrarbeit mit
 - Freitag wird immer als kurzer Arbeitstag behandelt
-- Notdienst mit mehreren Zeitbloecken pro Tag
-- Wochenend-Notdienst bleibt sichtbar, wird aber nicht in die normalen Wochen- und Monatsueberstunden eingerechnet
+- Notdienst mit mehreren Zeitblöcken pro Tag
+- Wochenend-Notdienst bleibt sichtbar, wird aber nicht in die normalen Wochen- und Monatsüberstunden eingerechnet
 - Arztkrank kann mit Zeiten dokumentiert werden, ohne Arbeitszeit, Plusstunden oder Minusstunden zu beeinflussen
-- Monatsuebersicht mit Monats-Iststunden und Monatsueberstunden
-- PDF-Export direkt in die hinterlegte Stundenzettel-Vorlage fuer Elisabeth
-- Separates Gleitzeitkonto mit automatischem Monatsuebertrag aus der Zeiterfassung, Gesamtstand und eigenem PDF-Export
+- Monatsübersicht mit Monats-Iststunden und Monatsüberstunden
+- PDF-Export direkt in die hinterlegte Stundenzettel-Vorlage für Elisabeth
+- Separates Gleitzeitkonto mit automatischem Monatsübertrag aus der Zeiterfassung, Gesamtstand und eigenem PDF-Export
 - Docker-Setup mit persistentem `data`-Ordner
 
 ## PDF-Export
 
-Der PDF-Export fuellt den Stundenzettel automatisch aus:
+Der PDF-Export füllt den Stundenzettel automatisch aus:
 
 - Name und Monat werden oben eingetragen
-- Fruehschicht landet im Bereich `Anwesenheit Vormittag`
+- Frühschicht landet im Bereich `Anwesenheit Vormittag`
 - Sommerschicht landet im Bereich `Anwesenheit Vormittag`
-- Spaetschicht landet im Bereich `Anwesenheit Nachmittag`
+- Spätschicht landet im Bereich `Anwesenheit Nachmittag`
 - Notdienst kann Vormittag und Nachmittag getrennt darstellen
 - Weitere Notdienst-Zeiten werden in `Bemerkungen` notiert
 - Sondertage wie Urlaub, Krank, Arztkrank und Feiertag erscheinen in `Bemerkungen`
@@ -43,11 +43,11 @@ Der PDF-Export fuellt den Stundenzettel automatisch aus:
 
 | Typ | Standardzeit | Wertung |
 | --- | --- | --- |
-| Fruehschicht | 06:45 - 15:00 | 7:45 Stunden, 30 Minuten Pause automatisch abgezogen |
+| Frühschicht | 06:45 - 15:00 | 7:45 Stunden, 30 Minuten Pause automatisch abgezogen |
 | Sommerschicht | 06:45 - 14:00 | Montag bis Donnerstag 7:15 Stunden als voller Arbeitstag ohne Pause; Freitag frei eintragbar ohne Wertung |
-| Spaetschicht | 11:55 - 19:00 | 7:00 Stunden Soll plus 5 Minuten Mehrarbeit |
+| Spätschicht | 11:55 - 19:00 | 7:00 Stunden Soll plus 5 Minuten Mehrarbeit |
 | Freitag | 06:45 - 13:00 | kurzer Freitag ohne Pause |
-| Notdienst | frei eintragbar | zaehlt als Stunden, Wochenend-Notdienst nicht in Gesamtueberstunden |
+| Notdienst | frei eintragbar | zählt als Stunden, Wochenend-Notdienst nicht in Gesamtüberstunden |
 | Urlaub | keine Zeit | keine Istzeit, kein Saldo |
 | Krank | keine Zeit | keine Istzeit, kein Saldo |
 | Arztkrank | Zeit optional | nur Dokumentation, keine Wertung |
@@ -66,7 +66,7 @@ Danach ist die App erreichbar unter:
 http://localhost:8091
 ```
 
-Im Container laeuft die App auf Port `8080`; die mitgelieferte `docker-compose.yml` veroeffentlicht sie lokal auf Port `8091`.
+Im Container läuft die App auf Port `8080`; die mitgelieferte `docker-compose.yml` veröffentlicht sie lokal auf Port `8091`.
 
 ## Portainer / NAS
 
@@ -74,7 +74,7 @@ Im Container laeuft die App auf Port `8080`; die mitgelieferte `docker-compose.y
 2. In Portainer einen neuen Stack anlegen.
 3. Inhalt der `docker-compose.yml` verwenden.
 4. Stack deployen.
-5. App ueber Port `8091` oder ueber einen Reverse Proxy oeffnen.
+5. App über Port `8091` oder über einen Reverse Proxy öffnen.
 
 Die Datenbank liegt persistent im Ordner:
 
@@ -90,8 +90,8 @@ Die wichtigsten Umgebungsvariablen:
 
 | Variable | Beschreibung |
 | --- | --- |
-| `APP_PASSWORD` | Passwort fuer den Login |
-| `APP_SECRET_KEY` | Secret Key fuer Flask-Sessions |
+| `APP_PASSWORD` | Passwort für den Login |
+| `APP_SECRET_KEY` | Secret Key für Flask-Sessions |
 | `DATA_DIR` | Speicherort der SQLite-Datenbank im Container |
 
 Beispiel:
@@ -99,14 +99,14 @@ Beispiel:
 ```yaml
 environment:
   APP_PASSWORD: "dein-sicheres-passwort"
-  APP_SECRET_KEY: "ein-langer-zufaelliger-secret-key"
+  APP_SECRET_KEY: "ein-langer-zufälliger-secret-key"
 ```
 
 ## Daten und GitHub
 
-Die echte Zeiterfassungsdatenbank gehoert nicht ins GitHub-Repository. Sie liegt im laufenden Betrieb im persistenten `data`-Ordner auf dem Server.
+Die echte Zeiterfassungsdatenbank gehört nicht ins GitHub-Repository. Sie liegt im laufenden Betrieb im persistenten `data`-Ordner auf dem Server.
 
-Das Repository enthaelt die App, Templates und Docker-Konfiguration. Persoenliche Daten wie `data/zeiterfassung.db` sollten lokal oder auf dem Server bleiben.
+Das Repository enthält die App, Templates und Docker-Konfiguration. Persönliche Daten wie `data/zeiterfassung.db` sollten lokal oder auf dem Server bleiben.
 
 ## Projektstruktur
 
@@ -124,8 +124,8 @@ Das Repository enthaelt die App, Templates und Docker-Konfiguration. Persoenlich
 
 ## Stand
 
-Aktueller gesicherter Stand: `Version 1.8`
+Aktueller gesicherter Stand: `Version 1.9`
 
-Die Aenderungen pro Version stehen in [CHANGELOG.md](CHANGELOG.md).
+Die Änderungen pro Version stehen in [CHANGELOG.md](CHANGELOG.md).
 
-Die App ist fuer den privaten produktiven Einsatz gedacht und kann direkt ueber Docker oder Portainer betrieben werden.
+Die App ist für den privaten produktiven Einsatz gedacht und kann direkt über Docker oder Portainer betrieben werden.

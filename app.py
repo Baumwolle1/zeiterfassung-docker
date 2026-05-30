@@ -26,7 +26,7 @@ YEAR_VACATION_DAYS = 30
 MONTH_NAMES = [
     "Januar",
     "Februar",
-    "Maerz",
+    "März",
     "April",
     "Mai",
     "Juni",
@@ -1511,9 +1511,9 @@ def resolve_template_pdf_path() -> Path | None:
 
 def export_shift_label(shift_type: str) -> str:
     labels = {
-        "Fruehschicht": "Fruehschicht",
+        "Fruehschicht": "Frühschicht",
         SOMMERSCHICHT_TYPE: "Sommerschicht",
-        "Spaetschicht": "Spaetschicht",
+        "Spaetschicht": "Spätschicht",
         "Freitag": "Freitag",
         "Notdienst": "Notdienst",
         "Urlaub": "Urlaub",
@@ -1960,7 +1960,7 @@ def build_legacy_month_pdf(year: int, month: int):
     story = [
         Paragraph(f"Zeiterfassung {MONTH_NAMES[month - 1]} {year}", styles["Title"]),
         Spacer(1, 6),
-        Paragraph("Monatsuebersicht im Hochformat mit klar getrennten Kalenderwochen.", styles["BodyText"]),
+        Paragraph("Monatsübersicht im Hochformat mit klar getrennten Kalenderwochen.", styles["BodyText"]),
         Spacer(1, 14),
     ]
     highlight_colors = {
@@ -2074,7 +2074,7 @@ def build_gleitzeit_pdf(year: int, month: int):
     story = [
         Paragraph(f"Gleitzeitkonto {MONTH_NAMES[month - 1]} {year}", styles["Title"]),
         Spacer(1, 6),
-        Paragraph("Separater Nachweis fuer Gleitzeit und manuelle Monatsstaende.", styles["BodyText"]),
+        Paragraph("Separater Nachweis für Gleitzeit und manuelle Monatsstände.", styles["BodyText"]),
         Spacer(1, 12),
     ]
 
@@ -2103,7 +2103,7 @@ def build_gleitzeit_pdf(year: int, month: int):
     story.append(summary_table)
     story.append(Spacer(1, 14))
 
-    story.append(Paragraph(f"Jahresuebersicht {year}", styles["Heading2"]))
+    story.append(Paragraph(f"Jahresübersicht {year}", styles["Heading2"]))
     year_rows = [["Monat", "Zeit", "Korr.", "Gleitzeit", "Monat", "Laufend"]]
     for summary in year_summary["months"]:
         month_number = summary["month"]
@@ -2157,7 +2157,7 @@ def build_gleitzeit_pdf(year: int, month: int):
             ]
         )
     if len(day_rows) == 1:
-        day_rows.append(["-", "-", "-", "00:00", "00:00", "Keine Eintraege"])
+        day_rows.append(["-", "-", "-", "00:00", "00:00", "Keine Einträge"])
 
     day_table = Table(day_rows, colWidths=[28 * mm, 38 * mm, 38 * mm, 24 * mm, 24 * mm, 22 * mm])
     day_table.setStyle(TableStyle([
