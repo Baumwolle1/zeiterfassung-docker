@@ -1,5 +1,11 @@
 # Changelog
 
+## Version 1.5 - 2026-05-30
+
+- Gleitzeitkonto speichert Monats- und Tagesaenderungen automatisch waehrend der Eingabe.
+- Speichern-Buttons bleiben als manuelle Sicherung sichtbar.
+- Gelbe Markierung des aktuellen Monats im Gleitzeit-PDF entfernt.
+
 ## Version 1.4 - 2026-05-30
 
 - Bestehender Stundenzettel bleibt unveraendert, nur der automatische Vormonatsuebertrag im PDF bleibt leer.

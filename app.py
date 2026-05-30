@@ -1982,9 +1982,6 @@ def build_gleitzeit_pdf(year: int, month: int):
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (1, 1), (1, -1), "CENTER"),
     ]
-    for row_index in range(1, len(year_rows)):
-        if row_index == month:
-            year_commands.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#FFF4CC")))
     year_table.setStyle(TableStyle(year_commands))
     story.append(year_table)
     story.append(Spacer(1, 14))

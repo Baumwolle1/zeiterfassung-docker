@@ -42,7 +42,7 @@
         </article>
       </div>
 
-      <form method="post" action="{{ url_for('save_gleitzeit_month_route') }}" class="entry-form">
+      <form method="post" action="{{ url_for('save_gleitzeit_month_route') }}" class="entry-form" data-autosave-form>
         <input type="hidden" name="year" value="{{ year }}">
         <input type="hidden" name="month" value="{{ month }}">
         <input type="hidden" name="day" value="{{ selected_day }}">
@@ -75,7 +75,7 @@
         </div>
       </div>
 
-      <form method="post" action="{{ url_for('save_gleitzeit_day_route') }}" class="entry-form gleitzeit-day-form">
+      <form method="post" action="{{ url_for('save_gleitzeit_day_route') }}" class="entry-form gleitzeit-day-form" data-autosave-form>
         <input type="hidden" name="year" value="{{ year }}">
         <input type="hidden" name="month" value="{{ month }}">
         <input type="hidden" name="day" value="{{ selected_day }}">
@@ -167,24 +167,69 @@
   </section>
 
   <footer class="version-footer">
-    <span>Version 1.4</span>
+    <span>Version 1.5</span>
   </footer>
 </main>
 
 <script>
+  const autosaveTimers = new Map();
+  const dirtyForms = new Set();
+  const activeSaves = new Map();
+
   function formatTimeInput(value) {
     const digits = String(value || "").replace(/\D/g, "").slice(0, 4);
     if (digits.length <= 2) return digits;
     return `${digits.slice(0, 2)}:${digits.slice(2)}`;
   }
 
+  async function postAutosave(form) {
+    if (!form) return;
+    clearTimeout(autosaveTimers.get(form));
+    autosaveTimers.delete(form);
+    dirtyForms.delete(form);
+    const request = fetch(form.action, {
+      method: "POST",
+      body: new FormData(form),
+      credentials: "same-origin",
+      headers: { "X-Requested-With": "autosave" },
+    }).catch(() => {});
+    activeSaves.set(form, request);
+    await request;
+    if (activeSaves.get(form) === request) {
+      activeSaves.delete(form);
+    }
+  }
+
+  function scheduleAutosave(form, delay = 450) {
+    if (!form) return;
+    dirtyForms.add(form);
+    clearTimeout(autosaveTimers.get(form));
+    autosaveTimers.set(form, setTimeout(() => postAutosave(form), delay));
+  }
+
+  async function flushAutosaves() {
+    const forms = Array.from(dirtyForms);
+    await Promise.all(forms.map((form) => postAutosave(form)));
+    await Promise.all(Array.from(activeSaves.values()));
+  }
+
   function bindTimeInput(input) {
     input.addEventListener("input", () => {
       input.value = formatTimeInput(input.value);
+      scheduleAutosave(input.closest("[data-autosave-form]"));
     });
   }
 
   document.querySelectorAll("[data-time-input]").forEach(bindTimeInput);
+
+  document.querySelectorAll("[data-autosave-form]").forEach((form) => {
+    form.addEventListener("input", (event) => {
+      if (event.target.matches("[data-time-input]")) return;
+      scheduleAutosave(form);
+    });
+    form.addEventListener("change", () => scheduleAutosave(form));
+    form.addEventListener("blur", () => scheduleAutosave(form, 0), true);
+  });
 
   document.querySelectorAll("[data-add-row]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -211,17 +256,34 @@
     });
   });
 
-  document.addEventListener("click", (event) => {
+  document.addEventListener("click", async (event) => {
     const removeButton = event.target.closest("[data-remove-row]");
-    if (!removeButton) return;
-    const list = removeButton.closest("[data-segment-list]");
-    const row = removeButton.closest("[data-row]");
-    if (!list || !row) return;
-    if (list.querySelectorAll("[data-row]").length <= 1) {
-      row.querySelectorAll("input").forEach((input) => { input.value = ""; });
+    if (removeButton) {
+      const list = removeButton.closest("[data-segment-list]");
+      const row = removeButton.closest("[data-row]");
+      const form = removeButton.closest("[data-autosave-form]");
+      if (!list || !row) return;
+      if (list.querySelectorAll("[data-row]").length <= 1) {
+        row.querySelectorAll("input").forEach((input) => { input.value = ""; });
+        scheduleAutosave(form);
+        return;
+      }
+      row.remove();
+      scheduleAutosave(form);
       return;
     }
-    row.remove();
+
+    const link = event.target.closest("a[href]");
+    if (!link || !dirtyForms.size) return;
+    event.preventDefault();
+    await flushAutosaves();
+    window.location.href = link.href;
+  });
+
+  window.addEventListener("pagehide", () => {
+    dirtyForms.forEach((form) => {
+      navigator.sendBeacon(form.action, new FormData(form));
+    });
   });
 </script>
 {% endblock %}

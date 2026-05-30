@@ -124,7 +124,7 @@ Das Repository enthaelt die App, Templates und Docker-Konfiguration. Persoenlich
 
 ## Stand
 
-Aktueller gesicherter Stand: `Version 1.4`
+Aktueller gesicherter Stand: `Version 1.5`
 
 Die Aenderungen pro Version stehen in [CHANGELOG.md](CHANGELOG.md).
 
