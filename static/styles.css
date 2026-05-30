@@ -223,8 +223,33 @@ h2 { font-size: clamp(1.35rem, 2vw, 1.9rem); }
   color: var(--muted);
   font-weight: 700;
 }
+.ledger-month small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-top: 3px;
+}
 .ledger-month strong {
   font-size: 1rem;
+}
+.gleitzeit-year-total {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 13px 14px;
+  border-radius: 18px;
+  background: rgba(244, 250, 230, 0.9);
+  border-color: rgba(111, 143, 47, 0.42);
+}
+.gleitzeit-year-total span {
+  color: var(--muted);
+  font-weight: 800;
+}
+.gleitzeit-year-total strong {
+  font-size: 1.05rem;
 }
 .gleitzeit-block {
   display: grid;

@@ -500,10 +500,10 @@ def create_app() -> Flask:
         month_entry = fetch_gleitzeit_month(year, month)
         month_entries = fetch_gleitzeit_month_entries(year, month)
         selected_entry = month_entries.get(selected_date.isoformat()) or empty_gleitzeit_entry()
-        year_months = fetch_gleitzeit_year_months(year)
-        month_cards = build_gleitzeit_month_cards(year, month, year_months)
         days = build_gleitzeit_days(year, month, selected_date, month_entries, today)
-        month_totals = summarize_gleitzeit_month(month_entries)
+        month_summary = build_gleitzeit_month_summary(year, month, month_entry, month_entries)
+        year_summary = build_gleitzeit_year_summary(year, month)
+        month_cards = build_gleitzeit_month_cards(year, month, year_summary["months"])
 
         return render_template(
             "gleitzeit.html",
@@ -519,7 +519,8 @@ def create_app() -> Flask:
             selected_entry=selected_entry,
             selected_work_segments=selected_entry["work_segments"] or [{"start": "", "end": ""}],
             selected_flex_segments=selected_entry["flex_segments"] or [{"start": "", "end": ""}],
-            month_totals=month_totals,
+            month_summary=month_summary,
+            year_summary=year_summary,
             prev_period=month_nav(year, month, -1),
             next_period=month_nav(year, month, 1),
         )
@@ -533,6 +534,8 @@ def create_app() -> Flask:
         manual_balance = parse_duration_input(request.form.get("manual_balance", ""))
         notes = request.form.get("notes", "")
         save_gleitzeit_month(year, month, manual_balance, notes)
+        if is_gleitzeit_autosave_request():
+            return jsonify(build_gleitzeit_response_payload(year, month, day))
         return redirect(url_for("gleitzeit", year=year, month=month, day=day))
 
     @app.post("/gleitzeit/day")
@@ -558,6 +561,8 @@ def create_app() -> Flask:
         ])
         notes = request.form.get("notes", "")
         save_gleitzeit_entry(selected_date, work_segments, flex_segments, notes)
+        if is_gleitzeit_autosave_request():
+            return jsonify(build_gleitzeit_response_payload(year, month, day))
         return redirect(url_for("gleitzeit", year=year, month=month, day=day))
 
     @app.post("/gleitzeit/day/delete")
@@ -567,6 +572,8 @@ def create_app() -> Flask:
         month = int(request.form["month"])
         day = int(request.form["day"])
         delete_gleitzeit_entry(date(year, month, day))
+        if is_gleitzeit_autosave_request():
+            return jsonify(build_gleitzeit_response_payload(year, month, day))
         return redirect(url_for("gleitzeit", year=year, month=month, day=day))
 
     @app.get("/gleitzeit/export/pdf")
@@ -964,18 +971,146 @@ def summarize_gleitzeit_month(month_entries: dict[str, dict]) -> dict:
     }
 
 
-def build_gleitzeit_month_cards(year: int, selected_month: int, year_months: dict[str, dict]) -> list[dict]:
-    cards = []
+def time_tracking_month_balance(year: int, month: int) -> int:
+    return month_balance_from_entries(year, month, fetch_month_entries(year, month))
+
+
+def build_gleitzeit_month_summary(
+    year: int,
+    month: int,
+    month_entry: dict | None = None,
+    month_entries: dict[str, dict] | None = None,
+) -> dict:
+    resolved_month_entry = month_entry or fetch_gleitzeit_month(year, month)
+    resolved_month_entries = month_entries if month_entries is not None else fetch_gleitzeit_month_entries(year, month)
+    month_totals = summarize_gleitzeit_month(resolved_month_entries)
+    tracked_balance = time_tracking_month_balance(year, month)
+    adjustment_balance = int(resolved_month_entry.get("manual_balance", 0) or 0)
+    flex_balance = month_totals["balance_minutes"]
+    total_balance = tracked_balance + adjustment_balance + flex_balance
+    return {
+        "month": month,
+        "period": period_key(year, month),
+        "tracked_balance": tracked_balance,
+        "adjustment_balance": adjustment_balance,
+        "flex_minutes": month_totals["flex_minutes"],
+        "flex_balance": flex_balance,
+        "work_minutes": month_totals["work_minutes"],
+        "days_with_flex": month_totals["days_with_flex"],
+        "total_balance": total_balance,
+        "notes": resolved_month_entry.get("notes", ""),
+    }
+
+
+def build_gleitzeit_year_summary(year: int, selected_month: int) -> dict:
+    saved_months = fetch_gleitzeit_year_months(year)
+    months: list[dict] = []
+    running_balance = 0
+    selected_total_balance = 0
     for month_number in range(1, 13):
         key = period_key(year, month_number)
-        month_entry = year_months.get(key, {"manual_balance": 0, "notes": ""})
+        month_entry = saved_months.get(key, {"period": key, "manual_balance": 0, "notes": ""})
+        month_entries = fetch_gleitzeit_month_entries(year, month_number)
+        summary = build_gleitzeit_month_summary(year, month_number, month_entry, month_entries)
+        running_balance += summary["total_balance"]
+        summary["running_balance"] = running_balance
+        if month_number <= selected_month:
+            selected_total_balance = running_balance
+        months.append(summary)
+    return {
+        "months": months,
+        "year_total_balance": running_balance,
+        "selected_total_balance": selected_total_balance,
+    }
+
+
+def is_gleitzeit_entry_filled(entry: dict | None) -> bool:
+    if not entry:
+        return False
+    return bool(entry.get("work_segments") or entry.get("flex_segments") or (entry.get("notes") or "").strip())
+
+
+def serialize_gleitzeit_month_summary(summary: dict) -> dict:
+    return {
+        "month": summary["month"],
+        "tracked_balance": format_signed_minutes(summary["tracked_balance"]),
+        "tracked_balance_class": balance_class(summary["tracked_balance"]),
+        "adjustment_balance": format_signed_minutes(summary["adjustment_balance"]),
+        "adjustment_balance_class": balance_class(summary["adjustment_balance"]),
+        "flex_minutes": format_minutes(summary["flex_minutes"]),
+        "flex_balance": format_signed_minutes(summary["flex_balance"]),
+        "flex_balance_class": balance_class(summary["flex_balance"]),
+        "total_balance": format_signed_minutes(summary["total_balance"]),
+        "total_balance_class": balance_class(summary["total_balance"]),
+        "days_with_flex": summary["days_with_flex"],
+    }
+
+
+def serialize_gleitzeit_month_card(summary: dict) -> dict:
+    return {
+        "month": summary["month"],
+        "tracked_balance": format_signed_minutes(summary["tracked_balance"]),
+        "flex_minutes": format_minutes(summary["flex_minutes"]),
+        "flex_balance": format_signed_minutes(summary["flex_balance"]),
+        "total_balance": format_signed_minutes(summary["total_balance"]),
+        "total_balance_class": balance_class(summary["total_balance"]),
+        "running_balance": format_signed_minutes(summary["running_balance"]),
+        "running_balance_class": balance_class(summary["running_balance"]),
+    }
+
+
+def build_gleitzeit_response_payload(year: int, month: int, day: int) -> dict:
+    month_entry = fetch_gleitzeit_month(year, month)
+    month_entries = fetch_gleitzeit_month_entries(year, month)
+    selected_date = date(year, month, day)
+    selected_entry = month_entries.get(selected_date.isoformat())
+    day_summary = summarize_gleitzeit_entry(selected_entry or empty_gleitzeit_entry())
+    month_summary = build_gleitzeit_month_summary(year, month, month_entry, month_entries)
+    year_summary = build_gleitzeit_year_summary(year, month)
+    return {
+        "month_summary": serialize_gleitzeit_month_summary(month_summary),
+        "year_summary": {
+            "selected_total_balance": format_signed_minutes(year_summary["selected_total_balance"]),
+            "selected_total_balance_class": balance_class(year_summary["selected_total_balance"]),
+            "year_total_balance": format_signed_minutes(year_summary["year_total_balance"]),
+            "year_total_balance_class": balance_class(year_summary["year_total_balance"]),
+        },
+        "month_cards": [serialize_gleitzeit_month_card(summary) for summary in year_summary["months"]],
+        "day": {
+            "day": day,
+            "has_entry": is_gleitzeit_entry_filled(selected_entry),
+            "work_text": format_minutes(day_summary["work_minutes"]),
+            "flex_text": format_minutes(day_summary["flex_minutes"]),
+            "detail_text": f"Arbeit {format_minutes(day_summary['work_minutes'])} | Gleitzeit {format_minutes(day_summary['flex_minutes'])}",
+            "balance_text": format_signed_minutes(day_summary["balance_minutes"]),
+            "balance_class": balance_class(day_summary["balance_minutes"]),
+        },
+    }
+
+
+def is_gleitzeit_autosave_request() -> bool:
+    return request.headers.get("X-Requested-With") == "autosave" or request.form.get("_autosave") == "1"
+
+
+def build_gleitzeit_month_cards(year: int, selected_month: int, year_months: list[dict]) -> list[dict]:
+    cards = []
+    for summary in year_months:
+        month_number = summary["month"]
         cards.append(
             {
                 "month": month_number,
                 "label": MONTH_NAMES[month_number - 1],
-                "period": key,
-                "manual_balance": month_entry["manual_balance"],
-                "manual_balance_text": format_signed_minutes(month_entry["manual_balance"]),
+                "period": summary["period"],
+                "tracked_balance": summary["tracked_balance"],
+                "tracked_balance_text": format_signed_minutes(summary["tracked_balance"]),
+                "flex_minutes": summary["flex_minutes"],
+                "flex_minutes_text": format_minutes(summary["flex_minutes"]),
+                "flex_balance": summary["flex_balance"],
+                "flex_balance_text": format_signed_minutes(summary["flex_balance"]),
+                "total_balance": summary["total_balance"],
+                "total_balance_text": format_signed_minutes(summary["total_balance"]),
+                "running_balance": summary["running_balance"],
+                "running_balance_text": format_signed_minutes(summary["running_balance"]),
                 "is_selected": month_number == selected_month,
             }
         )
@@ -995,7 +1130,7 @@ def build_gleitzeit_days(year: int, month: int, selected_date: date, month_entri
                 "weekday": WEEKDAY_NAMES[current.weekday()],
                 "is_selected": current == selected_date,
                 "is_today": current == today,
-                "has_entry": bool(entry),
+                "has_entry": is_gleitzeit_entry_filled(entry),
                 "work_text": format_minutes(summary["work_minutes"]),
                 "flex_text": format_minutes(summary["flex_minutes"]),
                 "balance_text": format_signed_minutes(summary["balance_minutes"]),
@@ -1926,8 +2061,8 @@ def build_legacy_month_pdf(year: int, month: int):
 def build_gleitzeit_pdf(year: int, month: int):
     month_entry = fetch_gleitzeit_month(year, month)
     month_entries = fetch_gleitzeit_month_entries(year, month)
-    year_months = fetch_gleitzeit_year_months(year)
-    month_totals = summarize_gleitzeit_month(month_entries)
+    month_summary = build_gleitzeit_month_summary(year, month, month_entry, month_entries)
+    year_summary = build_gleitzeit_year_summary(year, month)
 
     buffer = io.BytesIO()
     document = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=12 * mm, leftMargin=12 * mm, topMargin=12 * mm, bottomMargin=12 * mm)
@@ -1944,10 +2079,13 @@ def build_gleitzeit_pdf(year: int, month: int):
     ]
 
     summary_data = [
-        ["Manueller Monatsstand", format_signed_minutes(month_entry["manual_balance"])],
-        ["Gleitzeit im Monat genommen", format_minutes(month_totals["flex_minutes"])],
-        ["Rechnerische Auswirkung", format_signed_minutes(month_totals["balance_minutes"])],
-        ["Tage mit Gleitzeit", str(month_totals["days_with_flex"])],
+        ["Zeiterfassung Monat", format_signed_minutes(month_summary["tracked_balance"])],
+        ["Korrektur / Altbestand", format_signed_minutes(month_summary["adjustment_balance"])],
+        ["Gleitzeit im Monat genommen", format_minutes(month_summary["flex_minutes"])],
+        ["Gleitzeit-Wertung", format_signed_minutes(month_summary["flex_balance"])],
+        ["Monat gesamt", format_signed_minutes(month_summary["total_balance"])],
+        [f"Summa summarum bis {MONTH_NAMES[month - 1]}", format_signed_minutes(year_summary["selected_total_balance"])],
+        ["Tage mit Gleitzeit", str(month_summary["days_with_flex"])],
     ]
     if month_entry["notes"]:
         summary_data.append(["Monatsnotiz", month_entry["notes"]])
@@ -1966,21 +2104,34 @@ def build_gleitzeit_pdf(year: int, month: int):
     story.append(Spacer(1, 14))
 
     story.append(Paragraph(f"Jahresuebersicht {year}", styles["Heading2"]))
-    year_rows = [["Monat", "Manueller Stand", "Notiz"]]
-    for month_number in range(1, 13):
-        key = period_key(year, month_number)
-        entry = year_months.get(key, {"manual_balance": 0, "notes": ""})
-        year_rows.append([MONTH_NAMES[month_number - 1], format_signed_minutes(entry["manual_balance"]), entry["notes"] or ""])
-    year_table = Table(year_rows, colWidths=[44 * mm, 36 * mm, 94 * mm])
+    year_rows = [["Monat", "Zeit", "Korr.", "Gleitzeit", "Monat", "Laufend"]]
+    for summary in year_summary["months"]:
+        month_number = summary["month"]
+        year_rows.append(
+            [
+                MONTH_NAMES[month_number - 1],
+                format_signed_minutes(summary["tracked_balance"]),
+                format_signed_minutes(summary["adjustment_balance"]),
+                format_signed_minutes(summary["flex_balance"]),
+                format_signed_minutes(summary["total_balance"]),
+                format_signed_minutes(summary["running_balance"]),
+            ]
+        )
+    year_rows.append([f"Summa summarum bis {MONTH_NAMES[month - 1]}", "", "", "", "", format_signed_minutes(year_summary["selected_total_balance"])])
+    year_table = Table(year_rows, colWidths=[28 * mm, 28 * mm, 26 * mm, 30 * mm, 30 * mm, 32 * mm])
     year_commands = [
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DDEBFF")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#16325C")),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#C9D7E6")),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#FFFFFF"), colors.HexColor("#F9FBFE")]),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.HexColor("#FFFFFF"), colors.HexColor("#F9FBFE")]),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EAF3FF")),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("SPAN", (0, -1), (4, -1)),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (1, 1), (1, -1), "CENTER"),
+        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+        ("ALIGN", (0, -1), (4, -1), "RIGHT"),
     ]
     year_table.setStyle(TableStyle(year_commands))
     story.append(year_table)

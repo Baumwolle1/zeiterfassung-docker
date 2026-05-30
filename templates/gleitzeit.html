@@ -29,16 +29,16 @@
 
       <div class="gleitzeit-summary-grid">
         <article class="summary-card glass">
-          <span>Manueller Stand</span>
-          <strong class="{{ balance_class(month_entry.manual_balance) }}">{{ format_signed_minutes(month_entry.manual_balance) }}</strong>
+          <span>Zeiterfassung</span>
+          <strong data-month-tracked class="{{ balance_class(month_summary.tracked_balance) }}">{{ format_signed_minutes(month_summary.tracked_balance) }}</strong>
         </article>
         <article class="summary-card glass">
           <span>Gleitzeit genommen</span>
-          <strong>{{ format_minutes(month_totals.flex_minutes) }}</strong>
+          <strong data-month-flex>{{ format_minutes(month_summary.flex_minutes) }}</strong>
         </article>
         <article class="summary-card glass">
-          <span>Wertung</span>
-          <strong class="{{ balance_class(month_totals.balance_minutes) }}">{{ format_signed_minutes(month_totals.balance_minutes) }}</strong>
+          <span>Monat gesamt</span>
+          <strong data-month-total class="{{ balance_class(month_summary.total_balance) }}">{{ format_signed_minutes(month_summary.total_balance) }}</strong>
         </article>
       </div>
 
@@ -47,7 +47,7 @@
         <input type="hidden" name="month" value="{{ month }}">
         <input type="hidden" name="day" value="{{ selected_day }}">
         <label>
-          <span>Monatsstand</span>
+          <span>Korrektur / Altbestand</span>
           <input name="manual_balance" type="text" value="{{ month_balance_input }}" placeholder="+02:30">
         </label>
         <label>
@@ -59,11 +59,18 @@
 
       <div class="month-ledger">
         {% for item in month_cards %}
-          <a class="ledger-month glass {% if item.is_selected %}selected{% endif %}" href="{{ url_for('gleitzeit', year=year, month=item.month, day=1) }}">
-            <span>{{ item.label }}</span>
-            <strong class="{{ balance_class(item.manual_balance) }}">{{ item.manual_balance_text }}</strong>
+          <a class="ledger-month glass {% if item.is_selected %}selected{% endif %}" data-ledger-month="{{ item.month }}" href="{{ url_for('gleitzeit', year=year, month=item.month, day=1) }}">
+            <div>
+              <span>{{ item.label }}</span>
+              <small data-ledger-detail>Zeit {{ item.tracked_balance_text }} | Gleitzeit {{ item.flex_balance_text }}</small>
+            </div>
+            <strong data-ledger-balance class="{{ balance_class(item.total_balance) }}">{{ item.total_balance_text }}</strong>
           </a>
         {% endfor %}
+      </div>
+      <div class="gleitzeit-year-total glass">
+        <span>Summa summarum bis {{ month_names[month - 1] }}</span>
+        <strong data-year-selected-total class="{{ balance_class(year_summary.selected_total_balance) }}">{{ format_signed_minutes(year_summary.selected_total_balance) }}</strong>
       </div>
     </section>
 
@@ -149,25 +156,26 @@
         <h2>{{ month_names[month - 1] }} {{ year }}</h2>
       </div>
       <div class="weekly-overview-totals">
-        <span>Gleitzeit {{ format_minutes(month_totals.flex_minutes) }}</span>
+        <span data-month-flex-total>Gleitzeit {{ format_minutes(month_summary.flex_minutes) }}</span>
+        <span data-year-selected-total-line>Summa summarum {{ format_signed_minutes(year_summary.selected_total_balance) }}</span>
       </div>
     </div>
     <div class="gleitzeit-days">
       {% for item in days %}
-        <a class="gleitzeit-day glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %} {% if item.has_entry %}has-entry{% endif %}" href="{{ url_for('gleitzeit', year=year, month=month, day=item.date.day) }}">
+        <a class="gleitzeit-day glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %} {% if item.has_entry %}has-entry{% endif %}" data-day-card="{{ item.date.day }}" href="{{ url_for('gleitzeit', year=year, month=month, day=item.date.day) }}">
           <div class="day-number">{{ "%02d"|format(item.date.day) }}</div>
           <div>
             <strong>{{ item.weekday }}</strong>
-            <span>Arbeit {{ item.work_text }} | Gleitzeit {{ item.flex_text }}</span>
+            <span data-day-detail>Arbeit {{ item.work_text }} | Gleitzeit {{ item.flex_text }}</span>
           </div>
-          <div class="balance {{ item.balance_class }}">{{ item.balance_text }}</div>
+          <div data-day-balance class="balance {{ item.balance_class }}">{{ item.balance_text }}</div>
         </a>
       {% endfor %}
     </div>
   </section>
 
   <footer class="version-footer">
-    <span>Version 1.5</span>
+    <span>Version 1.6</span>
   </footer>
 </main>
 
@@ -182,25 +190,88 @@
     return `${digits.slice(0, 2)}:${digits.slice(2)}`;
   }
 
+  function setText(selector, value) {
+    const element = document.querySelector(selector);
+    if (element) element.textContent = value;
+  }
+
+  function setBalance(selector, value, className) {
+    const element = document.querySelector(selector);
+    if (!element) return;
+    element.textContent = value;
+    element.className = className;
+  }
+
+  function updateGleitzeitState(data) {
+    if (!data) return;
+    if (data.month_summary) {
+      setBalance("[data-month-tracked]", data.month_summary.tracked_balance, data.month_summary.tracked_balance_class);
+      setText("[data-month-flex]", data.month_summary.flex_minutes);
+      setBalance("[data-month-total]", data.month_summary.total_balance, data.month_summary.total_balance_class);
+      setText("[data-month-flex-total]", `Gleitzeit ${data.month_summary.flex_minutes}`);
+    }
+    if (data.year_summary) {
+      setBalance("[data-year-selected-total]", data.year_summary.selected_total_balance, data.year_summary.selected_total_balance_class);
+      setText("[data-year-selected-total-line]", `Summa summarum ${data.year_summary.selected_total_balance}`);
+    }
+    if (Array.isArray(data.month_cards)) {
+      data.month_cards.forEach((card) => {
+        const element = document.querySelector(`[data-ledger-month="${card.month}"]`);
+        if (!element) return;
+        const balance = element.querySelector("[data-ledger-balance]");
+        const detail = element.querySelector("[data-ledger-detail]");
+        if (balance) {
+          balance.textContent = card.total_balance;
+          balance.className = card.total_balance_class;
+        }
+        if (detail) {
+          detail.textContent = `Zeit ${card.tracked_balance} | Gleitzeit ${card.flex_balance}`;
+        }
+      });
+    }
+    if (data.day) {
+      const dayCard = document.querySelector(`[data-day-card="${data.day.day}"]`);
+      if (dayCard) {
+        dayCard.classList.toggle("has-entry", data.day.has_entry);
+        const detail = dayCard.querySelector("[data-day-detail]");
+        const balance = dayCard.querySelector("[data-day-balance]");
+        if (detail) detail.textContent = data.day.detail_text;
+        if (balance) {
+          balance.textContent = data.day.balance_text;
+          balance.className = `balance ${data.day.balance_class}`;
+        }
+      }
+    }
+  }
+
   async function postAutosave(form) {
     if (!form) return;
     clearTimeout(autosaveTimers.get(form));
     autosaveTimers.delete(form);
     dirtyForms.delete(form);
+    const formData = new FormData(form);
+    formData.append("_autosave", "1");
     const request = fetch(form.action, {
       method: "POST",
-      body: new FormData(form),
+      body: formData,
       credentials: "same-origin",
       headers: { "X-Requested-With": "autosave" },
-    }).catch(() => {});
+    }).then(async (response) => {
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        return response.json();
+      }
+      return null;
+    }).catch(() => null);
     activeSaves.set(form, request);
-    await request;
+    const data = await request;
     if (activeSaves.get(form) === request) {
       activeSaves.delete(form);
+      updateGleitzeitState(data);
     }
   }
 
-  function scheduleAutosave(form, delay = 450) {
+  function scheduleAutosave(form, delay = 250) {
     if (!form) return;
     dirtyForms.add(form);
     clearTimeout(autosaveTimers.get(form));
@@ -253,6 +324,8 @@
       `;
       row.querySelectorAll("[data-time-input]").forEach(bindTimeInput);
       list.appendChild(row);
+      const firstInput = row.querySelector("input");
+      if (firstInput) firstInput.focus();
     });
   });
 
@@ -282,7 +355,9 @@
 
   window.addEventListener("pagehide", () => {
     dirtyForms.forEach((form) => {
-      navigator.sendBeacon(form.action, new FormData(form));
+      const formData = new FormData(form);
+      formData.append("_autosave", "1");
+      navigator.sendBeacon(form.action, formData);
     });
   });
 </script>
