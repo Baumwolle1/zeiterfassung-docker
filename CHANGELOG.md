@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 1.8 - 2026-05-30
+
+- Stundenzettel-Oberflaeche neu strukturiert: Kopfzeile, Kennzahlen, Tageserfassung und Kalender sind klarer getrennt.
+- Mobile Ansicht sachlicher aufgebaut, damit Tagesauswahl, Saldo und Aktionen schneller auffindbar sind.
+- Optik reduziert: weniger Glas-Effekt, kleinere Rundungen, ruhigere Karten und kompaktere Buttons.
+- Bestehende Berechnung, Speicherung, Gleitzeitlogik und PDF-Funktionen unveraendert gelassen.
+
 ## Version 1.7 - 2026-05-30
 
 - Bezeichnung der laufenden Gleitzeit-Summe auf "Gesamtstand" geaendert.
