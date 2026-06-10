@@ -1090,10 +1090,33 @@ textarea {
     padding-top: max(8px, env(safe-area-inset-top));
   }
 
+  .work-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
   .app-topbar {
+    order: 1;
     grid-template-columns: 1fr;
     gap: 10px;
     padding-top: 8px;
+  }
+
+  .app-workspace {
+    order: 2;
+  }
+
+  .work-shell .status-strip {
+    order: 3;
+  }
+
+  .work-shell .weekly-overview {
+    order: 4;
+  }
+
+  .work-shell .version-footer {
+    order: 5;
   }
 
   .app-actions {

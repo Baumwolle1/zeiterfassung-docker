@@ -21,7 +21,9 @@ Die App ist darauf ausgelegt, Arbeitszeiten schnell am Handy einzutragen, Wochen
 - Arztkrank kann mit Zeiten dokumentiert werden, ohne Arbeitszeit, Plusstunden oder Minusstunden zu beeinflussen
 - Monatsübersicht mit Monats-Iststunden und Monatsüberstunden
 - PDF-Export direkt in die hinterlegte Stundenzettel-Vorlage für Elisabeth
+- PDF-Stundenzettel zeigt die Wochentagskürzel direkt neben den Tageszahlen
 - Separates Gleitzeitkonto mit automatischem Monatsübertrag aus der Zeiterfassung, Gesamtstand und eigenem PDF-Export
+- Gleitzeitkonto rechnet den automatischen Gesamtstand ab Mai 2026
 - Docker-Setup mit persistentem `data`-Ordner
 
 ## PDF-Export
@@ -37,7 +39,7 @@ Der PDF-Export füllt den Stundenzettel automatisch aus:
 - Sondertage wie Urlaub, Krank, Arztkrank und Feiertag erscheinen in `Bemerkungen`
 - Im Feld `Gesamt` steht die Kernarbeitszeit des Tages
 - Bei Abweichungen steht dahinter der Saldo, zum Beispiel `07:45 = +00:05`
-- Unten werden Monats-Saldo, Vormonat und aktueller Stand zusammengefasst
+- Unten werden Monats-Saldo, Vormonate und aktueller Stand zusammengefasst
 
 ## Schichtlogik
 
@@ -124,7 +126,7 @@ Das Repository enthält die App, Templates und Docker-Konfiguration. Persönlich
 
 ## Stand
 
-Aktueller gesicherter Stand: `Version 1.9`
+Aktueller gesicherter Stand: `Version 1.10`
 
 Die Änderungen pro Version stehen in [CHANGELOG.md](CHANGELOG.md).
 

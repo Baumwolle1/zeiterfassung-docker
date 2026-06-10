@@ -1,5 +1,12 @@
 # Changelog
 
+## Version 1.10 - 2026-06-10
+
+- PDF-Stundenzettel ergänzt links in den Tageszeilen die Wochentagskürzel Mo bis So.
+- Gleitzeitkonto rechnet Monats- und Gesamtstände automatisch erst ab Mai 2026; ältere Daten bleiben gespeichert, werden aber nicht mehr eingerechnet.
+- Vorlage unten auf `+/- Stunden Vormonate` angepasst.
+- Mobile Zeiterfassung ordnet die acht Kennzahlen unter dem Arbeitsbereich an, damit Tageserfassung und Kalender schneller erreichbar sind.
+
 ## Version 1.9 - 2026-05-30
 
 - Sichtbare deutsche Texte auf echte Umlaute umgestellt, unter anderem März, Frühschicht, Spätschicht und Monatsübersicht.

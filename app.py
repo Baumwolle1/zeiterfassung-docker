@@ -38,8 +38,9 @@ MONTH_NAMES = [
     "Dezember",
 ]
 WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
-WEEKDAY_SHORT = ["MO", "DI", "MI", "DO", "FR", "SA", "SO"]
+WEEKDAY_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 SOMMERSCHICHT_TYPE = "Sommerschicht"
+GLEITZEIT_BALANCE_START = date(2026, 5, 1)
 
 SHIFT_CONFIG = {
     "Fruehschicht": {"label": "Frühschicht", "target": 465, "break": 30, "start": "06:45", "end": "15:00"},
@@ -67,6 +68,9 @@ PDF_TEMPLATE_SOURCE_SIZE = (5088, 7008)
 PDF_TEMPLATE_COLUMN_LINES = [284, 845, 1298, 1755, 2213, 2670, 3128, 3596, 4038, 4805]
 PDF_TEMPLATE_DAY_ROW_LINES = [1477, 1602, 1724, 1857, 1979, 2105, 2235, 2361, 2486, 2617, 2738, 2867, 2997, 3123, 3251, 3379, 3500, 3628, 3756, 3885, 4008, 4134, 4258, 4391, 4510, 4633, 4761, 4890, 5016, 5145, 5272, 5399]
 PDF_TEMPLATE_SUMMARY_ROW_LINES = [5980, 6188, 6414, 6653]
+PDF_TEMPLATE_WEEKDAY_TEXT_X = 396
+PDF_TEMPLATE_VORMONATE_SUFFIX_X = 1125
+PDF_TEMPLATE_VORMONATE_SUFFIX_BASELINE_Y = 6252
 PDF_TEMPLATE_HEADER_BASELINE_Y = 555
 PDF_TEMPLATE_NAME_TEXT_X = 1040
 PDF_TEMPLATE_NAME_WIDTH = 1050
@@ -971,6 +975,10 @@ def summarize_gleitzeit_month(month_entries: dict[str, dict]) -> dict:
     }
 
 
+def is_gleitzeit_counted_period(year: int, month: int) -> bool:
+    return date(year, month, 1) >= GLEITZEIT_BALANCE_START
+
+
 def time_tracking_month_balance(year: int, month: int) -> int:
     return month_balance_from_entries(year, month, fetch_month_entries(year, month))
 
@@ -984,19 +992,21 @@ def build_gleitzeit_month_summary(
     resolved_month_entry = month_entry or fetch_gleitzeit_month(year, month)
     resolved_month_entries = month_entries if month_entries is not None else fetch_gleitzeit_month_entries(year, month)
     month_totals = summarize_gleitzeit_month(resolved_month_entries)
-    tracked_balance = time_tracking_month_balance(year, month)
-    adjustment_balance = int(resolved_month_entry.get("manual_balance", 0) or 0)
-    flex_balance = month_totals["balance_minutes"]
+    is_counted = is_gleitzeit_counted_period(year, month)
+    tracked_balance = time_tracking_month_balance(year, month) if is_counted else 0
+    adjustment_balance = int(resolved_month_entry.get("manual_balance", 0) or 0) if is_counted else 0
+    flex_balance = month_totals["balance_minutes"] if is_counted else 0
     total_balance = tracked_balance + adjustment_balance + flex_balance
     return {
         "month": month,
         "period": period_key(year, month),
+        "is_counted": is_counted,
         "tracked_balance": tracked_balance,
         "adjustment_balance": adjustment_balance,
-        "flex_minutes": month_totals["flex_minutes"],
+        "flex_minutes": month_totals["flex_minutes"] if is_counted else 0,
         "flex_balance": flex_balance,
-        "work_minutes": month_totals["work_minutes"],
-        "days_with_flex": month_totals["days_with_flex"],
+        "work_minutes": month_totals["work_minutes"] if is_counted else 0,
+        "days_with_flex": month_totals["days_with_flex"] if is_counted else 0,
         "total_balance": total_balance,
         "notes": resolved_month_entry.get("notes", ""),
     }
@@ -1797,6 +1807,9 @@ def build_template_month_pdf(year: int, month: int):
             continue
 
         current = date(year, month, day_number)
+        pdf.setFont("Helvetica-Bold", row_font_size)
+        pdf.drawCentredString(template_point_x(PDF_TEMPLATE_WEEKDAY_TEXT_X), baseline, WEEKDAY_SHORT[current.weekday()])
+
         entry = month_entries.get(current.isoformat())
         shift_type = entry["shift_type"] if entry else default_type_for(current)
         start_time = (entry["start_time"] if entry else "") or ""
@@ -1835,6 +1848,14 @@ def build_template_month_pdf(year: int, month: int):
             fitted_remark, fitted_size = fit_text(pdf, remarks, notes_width, "Helvetica", notes_font_size)
             pdf.setFont("Helvetica", fitted_size)
             pdf.drawString(notes_left, notes_baseline, fitted_remark)
+
+    pdf.setFillColorRGB(0, 0, 0)
+    pdf.setFont("Helvetica", 10.2)
+    pdf.drawString(
+        template_point_x(PDF_TEMPLATE_VORMONATE_SUFFIX_X),
+        template_point_y(PDF_TEMPLATE_VORMONATE_SUFFIX_BASELINE_Y),
+        "e",
+    )
 
     summary_x = template_point_x((4038 + 4805) / 2)
     summary_font_size = 10.2
