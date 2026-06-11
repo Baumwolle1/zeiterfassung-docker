@@ -1823,7 +1823,7 @@ def build_template_month_pdf(year: int, month: int):
             total_text = template_total_text_for_entry(current, shift_type, display_total_minutes, start_time, end_time, segments)
 
         remarks = combine_remarks(
-            export_shift_label(shift_type) if shift_type in {"Notdienst", "Urlaub", "Krank", "Arztkrank", "Feiertag"} else "",
+            export_shift_label(shift_type) if shift_type in {SOMMERSCHICHT_TYPE, "Notdienst", "Urlaub", "Krank", "Arztkrank", "Feiertag"} else "",
             f"Weitere Zeiten: {', '.join(extra_segments)}" if extra_segments else "",
             notes,
         )

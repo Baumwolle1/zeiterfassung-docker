@@ -1,5 +1,9 @@
 # Changelog
 
+## Version 1.11 - 2026-06-11
+
+- PDF-Stundenzettel schreibt bei Sommerschicht rechts in die Spalte `Bemerkungen` den Eintrag `Sommerschicht`.
+
 ## Version 1.10 - 2026-06-10
 
 - PDF-Stundenzettel ergänzt links in den Tageszeilen die Wochentagskürzel Mo bis So.

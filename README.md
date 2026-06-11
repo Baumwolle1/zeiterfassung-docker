@@ -34,6 +34,7 @@ Der PDF-Export füllt den Stundenzettel automatisch aus:
 - Frühschicht landet im Bereich `Anwesenheit Vormittag`
 - Sommerschicht landet im Bereich `Anwesenheit Vormittag`
 - Spätschicht landet im Bereich `Anwesenheit Nachmittag`
+- Sommerschicht wird zusätzlich rechts in `Bemerkungen` ausgewiesen
 - Notdienst kann Vormittag und Nachmittag getrennt darstellen
 - Weitere Notdienst-Zeiten werden in `Bemerkungen` notiert
 - Sondertage wie Urlaub, Krank, Arztkrank und Feiertag erscheinen in `Bemerkungen`
@@ -126,7 +127,7 @@ Das Repository enthält die App, Templates und Docker-Konfiguration. Persönlich
 
 ## Stand
 
-Aktueller gesicherter Stand: `Version 1.10`
+Aktueller gesicherter Stand: `Version 1.11`
 
 Die Änderungen pro Version stehen in [CHANGELOG.md](CHANGELOG.md).
 
