@@ -1051,6 +1051,16 @@ textarea {
   height: 46px;
 }
 
+.day-number span {
+  line-height: 1;
+}
+
+.day-number small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
 .day-card.selected,
 .gleitzeit-day.selected,
 .ledger-month.selected {
@@ -1075,6 +1085,68 @@ textarea {
   color: var(--muted);
 }
 
+.history-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+.history-item.restored {
+  background: #f8fafc;
+}
+
+.history-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.history-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.history-title-row h2 {
+  font-size: 1rem;
+}
+
+.history-copy p,
+.history-copy small {
+  color: var(--muted);
+}
+
+.history-state,
+.history-notice {
+  color: var(--positive);
+  font-weight: 800;
+}
+
+.history-state {
+  font-size: 0.78rem;
+}
+
+.history-notice,
+.history-empty {
+  padding: 14px 16px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 @media (max-width: 1080px) {
   .status-strip {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1097,10 +1169,13 @@ textarea {
   }
 
   .app-topbar {
-    order: 1;
     grid-template-columns: 1fr;
     gap: 10px;
     padding-top: 8px;
+  }
+
+  .work-shell .app-topbar {
+    order: 1;
   }
 
   .app-workspace {
@@ -1162,6 +1237,15 @@ textarea {
 
   .form-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .history-item {
+    grid-template-columns: 1fr;
+  }
+
+  .history-item form,
+  .history-item .button {
+    width: 100%;
   }
 }
 

@@ -9,6 +9,7 @@ Die App ist darauf ausgelegt, Arbeitszeiten schnell am Handy einzutragen, Wochen
 - Mobile Web-App für Handy, Tablet und Desktop
 - Tagesansicht mit Schichtauswahl, Arbeitsbeginn, Arbeitsende und Notizfeld
 - Wochenansicht und Monatsansicht mit schnellen Wechseln zwischen KW und Monat
+- Wochenansicht zeigt Montag bis Sonntag vollständig, auch über Monatsgrenzen hinweg
 - Frühschicht, Sommerschicht, Spätschicht, Freitag, Notdienst, Urlaub, Krank, Arztkrank, Feiertag und Frei
 - Automatische Standardzeiten für Frühschicht, Sommerschicht, Spätschicht und Freitag
 - Automatischer Pausenabzug bei Frühschicht
@@ -24,6 +25,8 @@ Die App ist darauf ausgelegt, Arbeitszeiten schnell am Handy einzutragen, Wochen
 - PDF-Stundenzettel zeigt die Wochentagskürzel direkt neben den Tageszahlen
 - Separates Gleitzeitkonto mit automatischem Monatsübertrag aus der Zeiterfassung, Gesamtstand und eigenem PDF-Export
 - Gleitzeitkonto rechnet den automatischen Gesamtstand ab Mai 2026
+- Automatischer Änderungsverlauf für Tages- und Wochenänderungen mit gezielter Wiederherstellung
+- Wochenvorlagen verlangen vor dem Überschreiben eine Bestätigung
 - Docker-Setup mit persistentem `data`-Ordner
 
 ## PDF-Export
@@ -127,7 +130,7 @@ Das Repository enthält die App, Templates und Docker-Konfiguration. Persönlich
 
 ## Stand
 
-Aktueller gesicherter Stand: `Version 1.11`
+Aktueller gesicherter Stand: `Version 1.12`
 
 Die Änderungen pro Version stehen in [CHANGELOG.md](CHANGELOG.md).
 

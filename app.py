@@ -23,6 +23,7 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "krause")
 APP_SECRET_KEY = os.environ.get("APP_SECRET_KEY", "zeiterfassung-krause-login")
 SESSION_DAYS = 30
 YEAR_VACATION_DAYS = 30
+HISTORY_COALESCE_MINUTES = 10
 MONTH_NAMES = [
     "Januar",
     "Februar",
@@ -239,6 +240,21 @@ def create_app() -> Flask:
         session.clear()
         return redirect(url_for("login"))
 
+    @app.get("/verlauf")
+    @login_required
+    def entry_history():
+        return render_template(
+            "history.html",
+            operations=fetch_entry_operations(),
+            restored=request.args.get("restored") == "1",
+        )
+
+    @app.post("/verlauf/<int:operation_id>/wiederherstellen")
+    @login_required
+    def restore_history_operation(operation_id: int):
+        restored = restore_entry_operation(operation_id)
+        return redirect(url_for("entry_history", restored="1" if restored else "0"))
+
     @app.get("/")
     @login_required
     def index():
@@ -261,32 +277,11 @@ def create_app() -> Flask:
         week_end = week_start + timedelta(days=6)
 
         month_entries = fetch_month_entries(year, month)
-        days = []
-        for day_number in range(1, days_in_month + 1):
-            current_date = date(year, month, day_number)
-            entry = month_entries.get(current_date.isoformat())
-            shift_type = entry["shift_type"] if entry else default_type_for(current_date)
-            totals = calculate_totals_for_day(
-                current_date,
-                shift_type,
-                (entry["start_time"] if entry else "") or "",
-                (entry["end_time"] if entry else "") or "",
-                (entry["segments"] if entry else []) or [],
-            )
-            days.append(
-                {
-                    "date": current_date,
-                    "is_selected": current_date == selected_date,
-                    "shift_type": shift_type,
-                    "weekday": WEEKDAY_NAMES[current_date.weekday()],
-                    "target_text": format_minutes(totals.target),
-                    "actual_text": format_minutes(totals.actual),
-                    "balance_text": format_minutes(totals.balance),
-                    "balance_class": balance_class(totals.balance),
-                    "is_today": current_date == today,
-                    "holiday_name": holiday_name_for(current_date),
-                }
-            )
+        week_entries = fetch_entries_between(week_start, week_end)
+        days = [
+            build_time_tracking_day(date(year, month, day_number), selected_date, month_entries, today)
+            for day_number in range(1, days_in_month + 1)
+        ]
 
         entry = fetch_entry(selected_date)
         form_data = (
@@ -301,16 +296,19 @@ def create_app() -> Flask:
             form_data["end_time"],
             form_data["segments"],
         )
-        week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, form_data)
+        week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, form_data, week_entries)
         week_balance_total = week_actual - week_target
         month_progress = calculate_month_progress(year, month, month_entries, selected_date, form_data, today)
         month_balance_total = calculate_month_balance(year, month, month_entries, selected_date, form_data, today)
         week_summaries = build_week_summaries(year, month, month_entries, selected_date, form_data)
         vacation_taken, sick_days = count_special_days(year)
-        visible_days = [
-            item for item in days
-            if view_mode == "month" or week_start <= item["date"] <= week_end
-        ]
+        if view_mode == "month":
+            visible_days = days
+        else:
+            visible_days = [
+                build_time_tracking_day(week_start + timedelta(days=offset), selected_date, week_entries, today)
+                for offset in range(7)
+            ]
 
         return render_template(
             "index.html",
@@ -319,6 +317,7 @@ def create_app() -> Flask:
             view_mode=view_mode,
             selected_date=selected_date,
             selected_day=selected_day,
+            selected_holiday_name=holiday_name_for(selected_date),
             days=days,
             visible_days=visible_days,
             form_data=form_data,
@@ -368,7 +367,7 @@ def create_app() -> Flask:
         notes = request.form.get("notes", "")
 
         payload = entry_payload_for_day(selected_date, shift_type, start_time, end_time, notes, segments)
-        save_entry(selected_date, payload["shift_type"], payload["start_time"], payload["end_time"], payload["notes"], payload["segments"])
+        save_entry_with_history(selected_date, payload["shift_type"], payload["start_time"], payload["end_time"], payload["notes"], payload["segments"])
         return redirect(url_for("index", year=year, month=month, day=day, view=view_mode))
 
     @app.post("/save-json")
@@ -389,10 +388,12 @@ def create_app() -> Flask:
         notes = payload.get("notes", "") or ""
 
         entry = entry_payload_for_day(selected_date, shift_type, start_time, end_time, notes, segments)
-        save_entry(selected_date, entry["shift_type"], entry["start_time"], entry["end_time"], entry["notes"], entry["segments"])
+        save_entry_with_history(selected_date, entry["shift_type"], entry["start_time"], entry["end_time"], entry["notes"], entry["segments"])
         totals = calculate_totals_for_day(selected_date, entry["shift_type"], entry["start_time"], entry["end_time"], entry["segments"])
         month_entries = fetch_month_entries(year, month)
-        week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, entry)
+        week_start = selected_date - timedelta(days=selected_date.weekday())
+        week_entries = fetch_entries_between(week_start, week_start + timedelta(days=6))
+        week_target, week_actual, month_target, month_actual = calculate_ranges(selected_date, month_entries, entry, week_entries)
         week_balance_total = week_actual - week_target
         today = client_today_from_request() or date.today()
         month_progress = calculate_month_progress(year, month, month_entries, selected_date, entry, today)
@@ -443,18 +444,17 @@ def create_app() -> Flask:
             return redirect(url_for("index", year=year, month=month, day=day, view="week"))
 
         week_start = selected_date - timedelta(days=selected_date.weekday())
+        updates: dict[date, dict] = {}
         for offset in range(7):
             current = week_start + timedelta(days=offset)
-            if current.month != month or current.year != year:
-                continue
             existing_entry = fetch_entry(current)
             if holiday_name_for(current):
                 notes = existing_entry["notes"] if existing_entry else ""
-                save_entry(current, "Feiertag", "", "", notes, [])
+                updates[current] = entry_payload_for_day(current, "Feiertag", "", "", notes, [])
                 continue
             if current.weekday() == 4:
                 notes = existing_entry["notes"] if existing_entry else ""
-                save_entry(
+                updates[current] = entry_payload_for_day(
                     current,
                     "Freitag",
                     SHIFT_CONFIG["Freitag"]["start"],
@@ -465,11 +465,11 @@ def create_app() -> Flask:
                 continue
             if current.weekday() >= 5:
                 notes = existing_entry["notes"] if existing_entry else ""
-                save_entry(current, "Frei", "", "", notes, [])
+                updates[current] = entry_payload_for_day(current, "Frei", "", "", notes, [])
                 continue
             defaults = SHIFT_CONFIG[template_type]
             notes = existing_entry["notes"] if existing_entry else ""
-            save_entry(
+            updates[current] = entry_payload_for_day(
                 current,
                 template_type,
                 defaults["start"],
@@ -477,6 +477,12 @@ def create_app() -> Flask:
                 notes,
                 None,
             )
+
+        apply_entry_updates(
+            updates,
+            "week_template",
+            f"KW {selected_date.isocalendar().week:02d} auf {SHIFT_CONFIG[template_type]['label']} gesetzt",
+        )
 
         return redirect(url_for("index", year=year, month=month, day=day, view="week"))
 
@@ -635,7 +641,7 @@ def create_app() -> Flask:
             segments[0][field] = value
 
         payload = entry_payload_for_day(selected_date, shift_type, start_time, end_time, notes, segments)
-        save_entry(selected_date, payload["shift_type"], payload["start_time"], payload["end_time"], payload["notes"], payload["segments"])
+        save_entry_with_history(selected_date, payload["shift_type"], payload["start_time"], payload["end_time"], payload["notes"], payload["segments"])
         totals = calculate_totals_for_day(selected_date, payload["shift_type"], payload["start_time"], payload["end_time"], payload["segments"])
         return jsonify(
             {
@@ -703,23 +709,54 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS entry_operations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                operation_type TEXT NOT NULL,
+                label TEXT NOT NULL,
+                coalesce_key TEXT,
+                before_json TEXT NOT NULL,
+                after_json TEXT NOT NULL,
+                affected_dates_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                restored_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_entry_operations_updated_at ON entry_operations(updated_at DESC)"
+        )
+
+
+def entry_from_db_row(day_value: date, row: tuple) -> dict:
+    return entry_payload_for_day(
+        day_value,
+        row[0],
+        row[1] or "",
+        row[2] or "",
+        row[3] or "",
+        segments_for_entry(row[0], row[1] or "", row[2] or "", row[4] or "[]"),
+    )
+
+
+def fetch_entry_with_conn(conn: sqlite3.Connection, day_value: date) -> dict | None:
+    row = conn.execute(
+        "SELECT shift_type, start_time, end_time, notes, segments_json FROM entries WHERE entry_date = ?",
+        (day_value.isoformat(),),
+    ).fetchone()
+    if not row:
+        return None
+    return entry_from_db_row(day_value, row)
 
 
 def fetch_entry(day_value: date) -> dict | None:
     with sqlite3.connect(DB_PATH) as conn:
-        row = conn.execute(
-            "SELECT shift_type, start_time, end_time, notes, segments_json FROM entries WHERE entry_date = ?",
-            (day_value.isoformat(),),
-        ).fetchone()
-    if not row:
-        return None
-    return entry_payload_for_day(day_value, row[0], row[1] or "", row[2] or "", row[3] or "", segments_for_entry(row[0], row[1] or "", row[2] or "", row[4] or "[]"))
+        return fetch_entry_with_conn(conn, day_value)
 
 
-def fetch_month_entries(year: int, month: int) -> dict[str, dict]:
-    start = date(year, month, 1)
-    _, days_in_month = calendar.monthrange(year, month)
-    end = date(year, month, days_in_month)
+def fetch_entries_between(start: date, end: date) -> dict[str, dict]:
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             "SELECT entry_date, shift_type, start_time, end_time, notes, segments_json FROM entries WHERE entry_date BETWEEN ? AND ?",
@@ -727,43 +764,219 @@ def fetch_month_entries(year: int, month: int) -> dict[str, dict]:
         ).fetchall()
     entries: dict[str, dict] = {}
     for row in rows:
-        day_value = datetime.strptime(row[0], "%Y-%m-%d").date()
-        entries[row[0]] = entry_payload_for_day(
-            day_value,
-            row[1],
-            row[2] or "",
-            row[3] or "",
-            row[4] or "",
-            segments_for_entry(row[1], row[2] or "", row[3] or "", row[5] or "[]"),
-        )
+        day_value = date.fromisoformat(row[0])
+        entries[row[0]] = entry_from_db_row(day_value, row[1:])
     return entries
+
+
+def fetch_month_entries(year: int, month: int) -> dict[str, dict]:
+    start = date(year, month, 1)
+    _, days_in_month = calendar.monthrange(year, month)
+    end = date(year, month, days_in_month)
+    return fetch_entries_between(start, end)
+
+
+def upsert_entry_with_conn(conn: sqlite3.Connection, day_value: date, payload: dict) -> None:
+    conn.execute(
+        """
+        INSERT INTO entries (entry_date, shift_type, start_time, end_time, notes, updated_at, segments_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(entry_date) DO UPDATE SET
+            shift_type = excluded.shift_type,
+            start_time = excluded.start_time,
+            end_time = excluded.end_time,
+            notes = excluded.notes,
+            updated_at = excluded.updated_at,
+            segments_json = excluded.segments_json
+        """,
+        (
+            day_value.isoformat(),
+            payload["shift_type"],
+            payload["start_time"],
+            payload["end_time"],
+            payload["notes"],
+            datetime.now().isoformat(timespec="seconds"),
+            json.dumps(payload["segments"], ensure_ascii=True),
+        ),
+    )
 
 
 def save_entry(day_value: date, shift_type: str, start_time: str, end_time: str, notes: str, segments: list[dict[str, str]] | None = None) -> None:
     payload = entry_payload_for_day(day_value, shift_type, start_time, end_time, notes, segments)
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            INSERT INTO entries (entry_date, shift_type, start_time, end_time, notes, updated_at, segments_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(entry_date) DO UPDATE SET
-                shift_type = excluded.shift_type,
-                start_time = excluded.start_time,
-                end_time = excluded.end_time,
-                notes = excluded.notes,
-                updated_at = excluded.updated_at,
-                segments_json = excluded.segments_json
-            """,
-            (
-                day_value.isoformat(),
-                payload["shift_type"],
-                payload["start_time"],
-                payload["end_time"],
-                payload["notes"],
-                datetime.now().isoformat(timespec="seconds"),
-                json.dumps(payload["segments"], ensure_ascii=True),
-            ),
+        upsert_entry_with_conn(conn, day_value, payload)
+
+
+def snapshot_entries(conn: sqlite3.Connection, day_values: list[date]) -> dict[str, dict | None]:
+    return {
+        day_value.isoformat(): fetch_entry_with_conn(conn, day_value)
+        for day_value in sorted(set(day_values))
+    }
+
+
+def record_entry_operation(
+    conn: sqlite3.Connection,
+    operation_type: str,
+    label: str,
+    before: dict[str, dict | None],
+    after: dict[str, dict | None],
+    coalesce_key: str | None = None,
+) -> None:
+    now = datetime.now()
+    now_text = now.isoformat(timespec="seconds")
+    before_text = json.dumps(before, ensure_ascii=True, sort_keys=True)
+    after_text = json.dumps(after, ensure_ascii=True, sort_keys=True)
+    affected_dates_text = json.dumps(sorted(before), ensure_ascii=True)
+
+    latest = conn.execute(
+        "SELECT id, coalesce_key, before_json, updated_at, restored_at FROM entry_operations ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    if latest and coalesce_key and latest[1] == coalesce_key and not latest[4]:
+        try:
+            latest_updated = datetime.fromisoformat(latest[3])
+        except (TypeError, ValueError):
+            latest_updated = now - timedelta(days=1)
+        if now - latest_updated <= timedelta(minutes=HISTORY_COALESCE_MINUTES):
+            if json.loads(latest[2]) == after:
+                conn.execute("DELETE FROM entry_operations WHERE id = ?", (latest[0],))
+            else:
+                conn.execute(
+                    """
+                    UPDATE entry_operations
+                    SET label = ?, after_json = ?, affected_dates_json = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (label, after_text, affected_dates_text, now_text, latest[0]),
+                )
+            return
+
+    conn.execute(
+        """
+        INSERT INTO entry_operations (
+            operation_type, label, coalesce_key, before_json, after_json,
+            affected_dates_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (operation_type, label, coalesce_key, before_text, after_text, affected_dates_text, now_text, now_text),
+    )
+
+
+def apply_entry_updates(
+    updates: dict[date, dict],
+    operation_type: str,
+    label: str,
+    coalesce_key: str | None = None,
+) -> bool:
+    normalized_updates = {
+        day_value: entry_payload_for_day(
+            day_value,
+            payload["shift_type"],
+            payload.get("start_time", ""),
+            payload.get("end_time", ""),
+            payload.get("notes", ""),
+            payload.get("segments", []),
         )
+        for day_value, payload in updates.items()
+    }
+    day_values = list(normalized_updates)
+    with sqlite3.connect(DB_PATH) as conn:
+        before = snapshot_entries(conn, day_values)
+        for day_value, payload in normalized_updates.items():
+            upsert_entry_with_conn(conn, day_value, payload)
+        after = snapshot_entries(conn, day_values)
+        if before == after:
+            return False
+        record_entry_operation(conn, operation_type, label, before, after, coalesce_key)
+    return True
+
+
+def save_entry_with_history(
+    day_value: date,
+    shift_type: str,
+    start_time: str,
+    end_time: str,
+    notes: str,
+    segments: list[dict[str, str]] | None = None,
+) -> bool:
+    payload = entry_payload_for_day(day_value, shift_type, start_time, end_time, notes, segments)
+    return apply_entry_updates(
+        {day_value: payload},
+        "day",
+        f"{WEEKDAY_NAMES[day_value.weekday()]}, {day_value.strftime('%d.%m.%Y')} geändert",
+        f"day:{day_value.isoformat()}",
+    )
+
+
+def format_operation_dates(date_values: list[str]) -> str:
+    parsed = sorted(date.fromisoformat(value) for value in date_values)
+    if not parsed:
+        return ""
+    if len(parsed) == 1:
+        return parsed[0].strftime("%d.%m.%Y")
+    return f"{parsed[0].strftime('%d.%m.%Y')} bis {parsed[-1].strftime('%d.%m.%Y')}"
+
+
+def fetch_entry_operations(limit: int = 60) -> list[dict]:
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            """
+            SELECT id, operation_type, label, affected_dates_json, updated_at, restored_at
+            FROM entry_operations
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    operations = []
+    for row in rows:
+        date_values = json.loads(row[3] or "[]")
+        try:
+            updated_label = datetime.fromisoformat(row[4]).strftime("%d.%m.%Y, %H:%M Uhr")
+        except (TypeError, ValueError):
+            updated_label = row[4]
+        operations.append(
+            {
+                "id": row[0],
+                "operation_type": row[1],
+                "label": row[2],
+                "date_summary": format_operation_dates(date_values),
+                "updated_label": updated_label,
+                "is_restored": bool(row[5]),
+            }
+        )
+    return operations
+
+
+def restore_entry_operation(operation_id: int) -> bool:
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT label, before_json, affected_dates_json, restored_at FROM entry_operations WHERE id = ?",
+            (operation_id,),
+        ).fetchone()
+        if not row or row[3]:
+            return False
+
+        target_snapshot = json.loads(row[1])
+        day_values = [date.fromisoformat(value) for value in json.loads(row[2] or "[]")]
+        current_snapshot = snapshot_entries(conn, day_values)
+        for day_value in day_values:
+            payload = target_snapshot.get(day_value.isoformat())
+            if payload is None:
+                conn.execute("DELETE FROM entries WHERE entry_date = ?", (day_value.isoformat(),))
+            else:
+                upsert_entry_with_conn(conn, day_value, payload)
+        restored_snapshot = snapshot_entries(conn, day_values)
+        now_text = datetime.now().isoformat(timespec="seconds")
+        conn.execute("UPDATE entry_operations SET restored_at = ? WHERE id = ?", (now_text, operation_id))
+        if current_snapshot != restored_snapshot:
+            record_entry_operation(
+                conn,
+                "restore",
+                f"Wiederherstellung: {row[0]}",
+                current_snapshot,
+                restored_snapshot,
+            )
+    return True
 
 
 def period_key(year: int, month: int) -> str:
@@ -1266,17 +1479,44 @@ def calculate_totals_for_day(day_value: date, shift_type: str, start_time: str, 
     return calculate_totals(shift_type, start_time, end_time, segments)
 
 
-def calculate_ranges(selected_date: date, month_entries: dict[str, dict], selected_form: dict) -> tuple[int, int, int, int]:
+def build_time_tracking_day(day_value: date, selected_date: date, entries: dict[str, dict], today: date) -> dict:
+    entry = entries.get(day_value.isoformat())
+    shift_type = entry["shift_type"] if entry else default_type_for(day_value)
+    totals = calculate_totals_for_day(
+        day_value,
+        shift_type,
+        (entry["start_time"] if entry else "") or "",
+        (entry["end_time"] if entry else "") or "",
+        (entry["segments"] if entry else []) or [],
+    )
+    return {
+        "date": day_value,
+        "is_selected": day_value == selected_date,
+        "shift_type": shift_type,
+        "weekday": WEEKDAY_NAMES[day_value.weekday()],
+        "target_text": format_minutes(totals.target),
+        "actual_text": format_minutes(totals.actual),
+        "balance_text": format_minutes(totals.balance),
+        "balance_class": balance_class(totals.balance),
+        "is_today": day_value == today,
+        "holiday_name": holiday_name_for(day_value),
+    }
+
+
+def calculate_ranges(
+    selected_date: date,
+    month_entries: dict[str, dict],
+    selected_form: dict,
+    week_entries: dict[str, dict] | None = None,
+) -> tuple[int, int, int, int]:
     week_start = selected_date - timedelta(days=selected_date.weekday())
     week_end = week_start + timedelta(days=6)
+    resolved_week_entries = week_entries if week_entries is not None else fetch_entries_between(week_start, week_end)
     week_target = 0
     week_actual = 0
     cursor = week_start
     while cursor <= week_end:
-        if cursor.month != selected_date.month or cursor.year != selected_date.year:
-            cursor += timedelta(days=1)
-            continue
-        totals = totals_for_aggregate_day(cursor, month_entries, selected_date, selected_form)
+        totals = totals_for_aggregate_day(cursor, resolved_week_entries, selected_date, selected_form)
         week_target += totals.target
         week_actual += totals.actual
         cursor += timedelta(days=1)

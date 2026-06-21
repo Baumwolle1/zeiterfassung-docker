@@ -1,5 +1,13 @@
 # Changelog
 
+## Version 1.12 - 2026-06-21
+
+- Automatischen Änderungsverlauf für Tages-Autosaves, Schnellstempel und komplette Wochenvorlagen ergänzt.
+- Einzelne Vorgänge können auf einer eigenen Verlaufsseite gezielt wiederhergestellt werden; auch die Wiederherstellung selbst wird protokolliert.
+- Wochenvorlagen verlangen vor dem Überschreiben eine Bestätigung.
+- KW-Ansicht zeigt Montag bis Sonntag vollständig über Monatsgrenzen hinweg und berücksichtigt alle sieben Tage in der Wochenberechnung.
+- Wochenvorlagen werden ebenfalls über Monatsgrenzen auf die vollständige Kalenderwoche angewendet.
+
 ## Version 1.11 - 2026-06-11
 
 - PDF-Stundenzettel schreibt bei Sommerschicht rechts in die Spalte `Bemerkungen` den Eintrag `Sommerschicht`.

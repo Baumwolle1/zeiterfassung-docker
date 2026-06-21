@@ -11,6 +11,7 @@
       <a class="button soft" data-today-link href="{{ url_for('index', year=today.year, month=today.month, day=today.day, view='week') }}">Heute</a>
       <a class="button dark" href="{{ url_for('export_pdf', year=year, month=month) }}">PDF</a>
       <a class="button soft" href="{{ url_for('gleitzeit', year=year, month=month, day=selected_day) }}">Gleitzeit</a>
+      <a class="button soft" href="{{ url_for('entry_history') }}">Verlauf</a>
       <form method="post" action="{{ url_for('logout') }}" class="inline-form">
         <button class="button soft" type="submit">Logout</button>
       </form>
@@ -60,8 +61,8 @@
         <div>
           <p class="eyebrow">Tageserfassung</p>
           <h2>{{ weekday_names[selected_date.weekday()] }}, {{ selected_date.strftime("%d.%m.%Y") }}</h2>
-          {% if days[selected_day - 1].holiday_name %}
-            <p class="holiday-badge">{{ days[selected_day - 1].holiday_name }}</p>
+          {% if selected_holiday_name %}
+            <p class="holiday-badge">{{ selected_holiday_name }}</p>
           {% endif %}
         </div>
       </div>
@@ -118,14 +119,14 @@
 
     <aside class="glass month-panel">
       <div class="week-apply-bar">
-        <form method="post" action="{{ url_for('apply_week_template') }}">
+        <form method="post" action="{{ url_for('apply_week_template') }}" onsubmit="return confirm('Diese ganze Kalenderwoche wirklich auf Frühschicht setzen?');">
           <input type="hidden" name="year" value="{{ year }}">
           <input type="hidden" name="month" value="{{ month }}">
           <input type="hidden" name="day" value="{{ selected_day }}">
           <input type="hidden" name="template_type" value="Fruehschicht">
           <button class="button week-apply-button" type="submit" aria-label="Woche auf Frühschicht setzen">Frühschicht</button>
         </form>
-        <form method="post" action="{{ url_for('apply_week_template') }}">
+        <form method="post" action="{{ url_for('apply_week_template') }}" onsubmit="return confirm('Diese ganze Kalenderwoche wirklich auf Spätschicht setzen?');">
           <input type="hidden" name="year" value="{{ year }}">
           <input type="hidden" name="month" value="{{ month }}">
           <input type="hidden" name="day" value="{{ selected_day }}">
@@ -155,8 +156,11 @@
 
       <div class="days">
         {% for item in visible_days %}
-          <a class="day-card glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %}" data-day-card {% if view_mode == "week" %}data-no-scroll-restore{% endif %} {% if item.is_selected %}data-selected-day-card{% endif %} href="{{ url_for('index', year=year, month=month, day=item.date.day, view=view_mode) }}">
-            <div class="day-number">{{ "%02d"|format(item.date.day) }}</div>
+          <a class="day-card glass {% if item.is_selected %}selected{% endif %} {% if item.is_today %}today{% endif %}" data-day-card {% if view_mode == "week" %}data-no-scroll-restore{% endif %} {% if item.is_selected %}data-selected-day-card{% endif %} href="{{ url_for('index', year=item.date.year, month=item.date.month, day=item.date.day, view=view_mode) }}">
+            <div class="day-number">
+              <span>{{ "%02d"|format(item.date.day) }}</span>
+              {% if item.date.month != month %}<small>{{ "%02d."|format(item.date.month) }}</small>{% endif %}
+            </div>
             <div class="day-copy">
               <strong>{{ item.weekday }}</strong>
               <span data-day-type>{{ shift_config[item.shift_type].label }}</span>
@@ -200,7 +204,7 @@
   </section>
 
   <footer class="version-footer">
-    <span>Version 1.11</span>
+    <span>Version 1.12</span>
   </footer>
 </main>
 

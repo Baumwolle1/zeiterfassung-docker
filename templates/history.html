@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="shell history-shell">
+  <header class="app-topbar">
+    <div class="app-title-block">
+      <p class="eyebrow">Zeiterfassung</p>
+      <h1>Änderungsverlauf</h1>
+    </div>
+    <nav class="hero-actions app-actions" aria-label="Schnellzugriff">
+      <a class="button dark" href="{{ url_for('index') }}">Stundenzettel</a>
+      <a class="button soft" href="{{ url_for('gleitzeit') }}">Gleitzeit</a>
+      <form method="post" action="{{ url_for('logout') }}" class="inline-form">
+        <button class="button soft" type="submit">Logout</button>
+      </form>
+    </nav>
+  </header>
+
+  {% if restored %}
+    <div class="history-notice" role="status">Stand wurde wiederhergestellt.</div>
+  {% endif %}
+
+  <section class="history-list" aria-label="Gesicherte Änderungen">
+    {% for operation in operations %}
+      <article class="history-item glass {% if operation.is_restored %}restored{% endif %}">
+        <div class="history-copy">
+          <div class="history-title-row">
+            <h2>{{ operation.label }}</h2>
+            {% if operation.is_restored %}<span class="history-state">Wiederhergestellt</span>{% endif %}
+          </div>
+          <p>{{ operation.date_summary }}</p>
+          <small>{{ operation.updated_label }}</small>
+        </div>
+        {% if not operation.is_restored %}
+          <form method="post" action="{{ url_for('restore_history_operation', operation_id=operation.id) }}" onsubmit="return confirm('Diesen früheren Stand wirklich wiederherstellen? Aktuelle Werte der betroffenen Tage werden dabei ebenfalls im Verlauf gesichert.');">
+            <button class="button soft" type="submit">Wiederherstellen</button>
+          </form>
+        {% endif %}
+      </article>
+    {% else %}
+      <div class="history-empty glass">Noch keine Änderungen im Verlauf.</div>
+    {% endfor %}
+  </section>
+
+  <footer class="version-footer">
+    <span>Version 1.12</span>
+  </footer>
+</main>
+{% endblock %}
