@@ -916,11 +916,57 @@ def format_operation_dates(date_values: list[str]) -> str:
     return f"{parsed[0].strftime('%d.%m.%Y')} bis {parsed[-1].strftime('%d.%m.%Y')}"
 
 
+def format_operation_entry(payload: dict | None) -> dict:
+    if payload is None:
+        return {"label": "Kein Eintrag", "times": "", "notes": ""}
+
+    shift_type = payload.get("shift_type", "")
+    shift_label = SHIFT_CONFIG.get(shift_type, {}).get("label", shift_type or "Unbekannt")
+    segments = payload.get("segments") or []
+    time_ranges = []
+    for segment in segments:
+        start_value = (segment.get("start") or "").strip()
+        end_value = (segment.get("end") or "").strip()
+        if start_value or end_value:
+            time_ranges.append(f"{start_value or '--:--'}–{end_value or '--:--'}")
+    if not time_ranges:
+        start_value = (payload.get("start_time") or "").strip()
+        end_value = (payload.get("end_time") or "").strip()
+        if start_value or end_value:
+            time_ranges.append(f"{start_value or '--:--'}–{end_value or '--:--'}")
+
+    return {
+        "label": shift_label,
+        "times": ", ".join(time_ranges) or "Keine Uhrzeit",
+        "notes": (payload.get("notes") or "").strip(),
+    }
+
+
+def build_operation_changes(before: dict, after: dict, date_values: list[str]) -> list[dict]:
+    changes = []
+    for date_value in sorted(date_values):
+        before_entry = before.get(date_value)
+        after_entry = after.get(date_value)
+        if before_entry == after_entry:
+            continue
+        day_value = date.fromisoformat(date_value)
+        iso_year, iso_week, _ = day_value.isocalendar()
+        changes.append(
+            {
+                "date_label": f"{WEEKDAY_SHORT[day_value.weekday()]}, {day_value.strftime('%d.%m.%Y')}",
+                "kw_label": f"KW {iso_week:02d}/{iso_year}",
+                "before": format_operation_entry(before_entry),
+                "after": format_operation_entry(after_entry),
+            }
+        )
+    return changes
+
+
 def fetch_entry_operations(limit: int = 60) -> list[dict]:
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
-            SELECT id, operation_type, label, affected_dates_json, updated_at, restored_at
+            SELECT id, operation_type, label, affected_dates_json, before_json, after_json, updated_at, restored_at
             FROM entry_operations
             ORDER BY id DESC
             LIMIT ?
@@ -930,18 +976,35 @@ def fetch_entry_operations(limit: int = 60) -> list[dict]:
     operations = []
     for row in rows:
         date_values = json.loads(row[3] or "[]")
+        before = json.loads(row[4] or "{}")
+        after = json.loads(row[5] or "{}")
+        changes = build_operation_changes(before, after, date_values)
+        changed_date_values = [
+            date_value
+            for date_value in date_values
+            if before.get(date_value) != after.get(date_value)
+        ]
+        kw_labels = []
+        for date_value in changed_date_values:
+            day_value = date.fromisoformat(date_value)
+            iso_year, iso_week, _ = day_value.isocalendar()
+            label = f"KW {iso_week:02d}/{iso_year}"
+            if label not in kw_labels:
+                kw_labels.append(label)
         try:
-            updated_label = datetime.fromisoformat(row[4]).strftime("%d.%m.%Y, %H:%M Uhr")
+            updated_label = datetime.fromisoformat(row[6]).strftime("%d.%m.%Y, %H:%M Uhr")
         except (TypeError, ValueError):
-            updated_label = row[4]
+            updated_label = row[6]
         operations.append(
             {
                 "id": row[0],
                 "operation_type": row[1],
                 "label": row[2],
-                "date_summary": format_operation_dates(date_values),
+                "date_summary": format_operation_dates(changed_date_values or date_values),
+                "kw_summary": ", ".join(kw_labels),
+                "changes": changes,
                 "updated_label": updated_label,
-                "is_restored": bool(row[5]),
+                "is_restored": bool(row[7]),
             }
         )
     return operations

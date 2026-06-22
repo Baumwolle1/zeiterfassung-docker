@@ -26,6 +26,7 @@ Die App ist darauf ausgelegt, Arbeitszeiten schnell am Handy einzutragen, Wochen
 - Separates Gleitzeitkonto mit automatischem Monatsübertrag aus der Zeiterfassung, Gesamtstand und eigenem PDF-Export
 - Gleitzeitkonto rechnet den automatischen Gesamtstand ab Mai 2026
 - Automatischer Änderungsverlauf für Tages- und Wochenänderungen mit gezielter Wiederherstellung
+- Änderungsverlauf zeigt Kalenderwoche sowie Status, Uhrzeiten und Notizen vor und nach jeder Änderung
 - Wochenvorlagen verlangen vor dem Überschreiben eine Bestätigung
 - Docker-Setup mit persistentem `data`-Ordner
 
@@ -130,7 +131,7 @@ Das Repository enthält die App, Templates und Docker-Konfiguration. Persönlich
 
 ## Stand
 
-Aktueller gesicherter Stand: `Version 1.12`
+Aktueller gesicherter Stand: `Version 1.13`
 
 Die Änderungen pro Version stehen in [CHANGELOG.md](CHANGELOG.md).
 

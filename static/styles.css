@@ -1098,7 +1098,7 @@ textarea {
 .history-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: 16px;
   padding: 16px;
 }
@@ -1124,9 +1124,81 @@ textarea {
   font-size: 1rem;
 }
 
-.history-copy p,
+.history-kw,
+.history-meta,
 .history-copy small {
   color: var(--muted);
+}
+
+.history-kw {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.history-meta {
+  display: flex;
+  gap: 6px 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.history-details {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.history-details summary {
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.history-changes {
+  display: grid;
+  margin-top: 10px;
+}
+
+.history-change {
+  display: grid;
+  grid-template-columns: minmax(145px, 0.42fr) minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px 0;
+}
+
+.history-change + .history-change {
+  border-top: 1px solid var(--border);
+}
+
+.history-change-date,
+.history-value {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.history-change-date span,
+.history-value > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.history-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.history-value strong,
+.history-value small {
+  overflow-wrap: anywhere;
+}
+
+.history-note {
+  margin-top: 3px;
 }
 
 .history-state,
@@ -1247,6 +1319,10 @@ textarea {
   .history-item .button {
     width: 100%;
   }
+
+  .history-change {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 430px) {
@@ -1268,6 +1344,10 @@ textarea {
   }
 
   .form-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .history-values {
     grid-template-columns: 1fr;
   }
 }

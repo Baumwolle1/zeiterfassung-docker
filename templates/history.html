@@ -1,5 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
+{% macro render_entry_state(title, state) %}
+  <div class="history-value">
+    <span>{{ title }}</span>
+    <strong>{{ state.label }}</strong>
+    {% if state.times %}<small>{{ state.times }}</small>{% endif %}
+    {% if state.notes %}<small class="history-note">Notiz: {{ state.notes }}</small>{% endif %}
+  </div>
+{% endmacro %}
 <main class="shell history-shell">
   <header class="app-topbar">
     <div class="app-title-block">
@@ -25,10 +33,34 @@
         <div class="history-copy">
           <div class="history-title-row">
             <h2>{{ operation.label }}</h2>
+            {% if operation.kw_summary %}<span class="history-kw">{{ operation.kw_summary }}</span>{% endif %}
             {% if operation.is_restored %}<span class="history-state">Wiederhergestellt</span>{% endif %}
           </div>
-          <p>{{ operation.date_summary }}</p>
-          <small>{{ operation.updated_label }}</small>
+          <div class="history-meta">
+            <span>{{ operation.date_summary }}</span>
+            <small>{{ operation.updated_label }}</small>
+          </div>
+          {% if operation.changes %}
+            <details class="history-details" {% if operation.changes|length == 1 %}open{% endif %}>
+              <summary>
+                {% if operation.changes|length == 1 %}Änderung{% else %}{{ operation.changes|length }} geänderte Tage anzeigen{% endif %}
+              </summary>
+              <div class="history-changes">
+                {% for change in operation.changes %}
+                  <div class="history-change">
+                    <div class="history-change-date">
+                      <strong>{{ change.date_label }}</strong>
+                      <span>{{ change.kw_label }}</span>
+                    </div>
+                    <div class="history-values">
+                      {{ render_entry_state("Vorher", change.before) }}
+                      {{ render_entry_state("Nachher", change.after) }}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            </details>
+          {% endif %}
         </div>
         {% if not operation.is_restored %}
           <form method="post" action="{{ url_for('restore_history_operation', operation_id=operation.id) }}" onsubmit="return confirm('Diesen früheren Stand wirklich wiederherstellen? Aktuelle Werte der betroffenen Tage werden dabei ebenfalls im Verlauf gesichert.');">
@@ -42,7 +74,7 @@
   </section>
 
   <footer class="version-footer">
-    <span>Version 1.12</span>
+    <span>Version 1.13</span>
   </footer>
 </main>
 {% endblock %}

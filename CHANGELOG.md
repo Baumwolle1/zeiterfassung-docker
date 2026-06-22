@@ -1,5 +1,11 @@
 # Changelog
 
+## Version 1.13 - 2026-06-23
+
+- Verlauf um KW-Anzeige und konkrete Vorher-/Nachher-Werte erweitert.
+- Geänderte Schicht beziehungsweise Status, Uhrzeiten und Notizen werden pro betroffenem Tag angezeigt.
+- Einzelne Tagesänderungen sind direkt sichtbar; mehrtägige Änderungen bleiben kompakt aufklappbar.
+
 ## Version 1.12 - 2026-06-21
 
 - Automatischen Änderungsverlauf für Tages-Autosaves, Schnellstempel und komplette Wochenvorlagen ergänzt.
