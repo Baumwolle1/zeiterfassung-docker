@@ -1,5 +1,10 @@
 # Changelog
 
+## Version 1.14 - 2026-07-05
+
+- PDF-Feld rechts neben `Aktuelle Stunden =` bleibt beim Export leer.
+- Automatisch berechneter Monats-Saldo in der ersten Summenzeile bleibt unverändert erhalten.
+
 ## Version 1.13 - 2026-06-23
 
 - Verlauf um KW-Anzeige und konkrete Vorher-/Nachher-Werte erweitert.

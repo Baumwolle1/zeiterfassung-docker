@@ -44,7 +44,7 @@ Der PDF-Export füllt den Stundenzettel automatisch aus:
 - Sondertage wie Urlaub, Krank, Arztkrank und Feiertag erscheinen in `Bemerkungen`
 - Im Feld `Gesamt` steht die Kernarbeitszeit des Tages
 - Bei Abweichungen steht dahinter der Saldo, zum Beispiel `07:45 = +00:05`
-- Unten werden Monats-Saldo, Vormonate und aktueller Stand zusammengefasst
+- Unten wird nur der Monats-Saldo automatisch eingetragen; `Vormonate` und `Aktuelle Stunden` bleiben für den handschriftlichen Eintrag leer
 
 ## Schichtlogik
 
@@ -131,7 +131,7 @@ Das Repository enthält die App, Templates und Docker-Konfiguration. Persönlich
 
 ## Stand
 
-Aktueller gesicherter Stand: `Version 1.13`
+Aktueller gesicherter Stand: `Version 1.14`
 
 Die Änderungen pro Version stehen in [CHANGELOG.md](CHANGELOG.md).
 

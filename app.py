@@ -2165,7 +2165,7 @@ def build_template_month_pdf(year: int, month: int):
     summary_rows = [
         format_signed_minutes(month_balance),
         "",
-        format_signed_minutes(month_balance),
+        "",
     ]
     pdf.setFont("Helvetica-Bold", summary_font_size)
     for index, value in enumerate(summary_rows):
